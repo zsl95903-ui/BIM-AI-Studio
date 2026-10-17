@@ -62,7 +62,7 @@ public static class CoreServicesFactory
 		}
 		try
 		{
-			return new RemoteProfileClient(cryptoService, httpClientFactory);
+			return new NullRemoteProfileClient();
 		}
 		catch (Exception ex)
 		{
