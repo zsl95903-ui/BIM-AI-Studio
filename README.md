@@ -145,6 +145,7 @@ Agent 工作流（读上下文 → 解析 ID → dry-run → 写入 → 读回�
 
 | 文档 | 内容 |
 | --- | --- |
+| [technical-overview.md](docs/technical-overview.md) | 技术说明：架构、模型调用工具链路、可扩展性 |
 | [development-guide.md](docs/development-guide.md) | 开发说明：问题定义、能力域、扩展机制、底层契约 |
 | [architecture.md](docs/architecture.md) | 四层架构与调用链 |
 | [bridge-protocol.md](docs/bridge-protocol.md) | 管道、请求/响应、错误码、串行化 |
