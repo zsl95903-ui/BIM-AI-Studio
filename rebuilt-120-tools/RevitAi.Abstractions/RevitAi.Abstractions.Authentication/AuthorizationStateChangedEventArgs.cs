@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace RevitAi.Abstractions.Authentication;
@@ -11,7 +11,7 @@ public class AuthorizationStateChangedEventArgs : EventArgs
 
 	public DateTime? ExpiryDate { get; set; }
 
-	public decimal CreditsBalance { get; set; }
+	public decimal UsageBalance { get; set; }
 
 	public Dictionary<string, int> TrialUsage { get; set; } = new Dictionary<string, int>();
 

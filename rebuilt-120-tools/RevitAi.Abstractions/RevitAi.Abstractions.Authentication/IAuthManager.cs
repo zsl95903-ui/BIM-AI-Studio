@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using RevitAi.Abstractions.Common;
@@ -47,11 +47,11 @@ public interface IAuthManager
 
 	Task<Result<int>> GetRemainingTrialUsageAsync(string featureId);
 
-	decimal GetCachedCreditsBalance();
+	decimal GetCachedUsageBalance();
 
-	CombinedCreditsInfo GetCachedCreditsInfo();
+	CombinedUsageInfo GetCachedUsageInfo();
 
-	Task RefreshCreditsCacheAsync();
+	Task RefreshUsageCacheAsync();
 
 	Dictionary<string, int> GetCachedTrialUsage();
 
@@ -91,7 +91,7 @@ public interface IAuthManager
 
 	Task<Result> UnbindDeviceAsync(string deviceId);
 
-	Task<Result> InitializeUserCreditsAsync();
+	Task<Result> InitializeUserUsageAsync();
 
 	void SetCurrentRevitVersion(string versionYear);
 

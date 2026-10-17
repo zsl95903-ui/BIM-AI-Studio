@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using RevitAi.Abstractions.Authentication;
@@ -9,7 +9,6 @@ namespace RevitAi.Core.Authentication;
 /// <summary>
 /// Local authorization stub (authorization layer is intentionally stubbed).
 ///
-/// The original Ext.Tools validated accounts/licenses/device binding against Supabase and
 /// distributed updates plus credit settlement through Tencent COS. Per the agreed plan this
 /// rebuild replaces that with the class below:
 ///   * no network requests at all;
@@ -90,11 +89,11 @@ public sealed class LocalAuthManager : IAuthManager
 	public Task<Result<int>> GetRemainingTrialUsageAsync(string featureId)
 		=> Task.FromResult(Result<int>.Success(int.MaxValue));
 
-	public decimal GetCachedCreditsBalance() => 0m;
+	public decimal GetCachedUsageBalance() => 0m;
 
-	public CombinedCreditsInfo GetCachedCreditsInfo() => new CombinedCreditsInfo();
+	public CombinedUsageInfo GetCachedUsageInfo() => new CombinedUsageInfo();
 
-	public Task RefreshCreditsCacheAsync() => Task.CompletedTask;
+	public Task RefreshUsageCacheAsync() => Task.CompletedTask;
 
 	public Dictionary<string, int> GetCachedTrialUsage() => new Dictionary<string, int>(_trialUsage);
 
@@ -155,7 +154,7 @@ public sealed class LocalAuthManager : IAuthManager
 	public Task<Result> UnbindDeviceAsync(string deviceId)
 		=> Task.FromResult(Result.Success());
 
-	public Task<Result> InitializeUserCreditsAsync()
+	public Task<Result> InitializeUserUsageAsync()
 		=> Task.FromResult(Result.Success());
 
 	public void SetCurrentRevitVersion(string versionYear)
@@ -170,7 +169,7 @@ public sealed class LocalAuthManager : IAuthManager
 			HasValidLicense = true,
 			LicenseType = _license.LicenseType,
 			ExpiryDate = _license.ValidTo,
-			CreditsBalance = 0m,
+			UsageBalance = 0m,
 			TrialUsage = new Dictionary<string, int>(_trialUsage)
 		};
 	}
@@ -184,7 +183,7 @@ public sealed class LocalAuthManager : IAuthManager
 			HasValidLicense = true,
 			LicenseType = _license.LicenseType,
 			ExpiryDate = _license.ValidTo,
-			CreditsBalance = 0m,
+			UsageBalance = 0m,
 			TrialUsage = new Dictionary<string, int>(_trialUsage),
 			UserDevices = new List<IDeviceInfo>(_devices)
 		});

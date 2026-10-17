@@ -1,9 +1,9 @@
-﻿using System;
+using System;
 using Newtonsoft.Json;
 
 namespace RevitAi.Abstractions.Authentication;
 
-public sealed class CombinedCreditsInfo
+public sealed class CombinedUsageInfo
 {
 	[JsonProperty("total_balance")]
 	public decimal TotalBalance { get; set; }
@@ -14,20 +14,20 @@ public sealed class CombinedCreditsInfo
 	[JsonProperty("device_balance")]
 	public decimal DeviceBalance { get; set; }
 
-	[JsonProperty("total_purchased")]
-	public decimal TotalPurchased { get; set; }
+	[JsonProperty("total_granted")]
+	public decimal TotalGranted { get; set; }
 
 	[JsonProperty("total_consumed")]
 	public decimal TotalConsumed { get; set; }
 
-	[JsonProperty("user_purchased")]
-	public decimal UserPurchased { get; set; }
+	[JsonProperty("user_granted")]
+	public decimal UserGranted { get; set; }
 
 	[JsonProperty("user_consumed")]
 	public decimal UserConsumed { get; set; }
 
-	[JsonProperty("device_purchased")]
-	public decimal DevicePurchased { get; set; }
+	[JsonProperty("device_granted")]
+	public decimal DeviceGranted { get; set; }
 
 	[JsonProperty("device_consumed")]
 	public decimal DeviceConsumed { get; set; }
