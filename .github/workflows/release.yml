@@ -1,0 +1,64 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version, e.g. 1.0.0'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    name: verify sources
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Engine smoke tests
+        shell: pwsh
+        run: |
+          $gen = Join-Path $env:RUNNER_TEMP 'generated'
+          dotnet run --project clean-room-tools/tools/ToolSetGenerator/ToolSetGenerator.csproj `
+            -c Release --nologo -- `
+            --catalog clean-room-tools/contracts/tool-contracts.json `
+            --out-tools $gen --namespace ExtToolLib
+          if ($LASTEXITCODE -ne 0) { throw 'generation failed' }
+          dotnet run --project clean-room-tools/tests/RevitAi.Engine.SmokeTests/RevitAi.Engine.SmokeTests.csproj `
+            -c Release --nologo -- `
+            --external clean-room-tools/contracts/external-tools.json `
+            --tool-index (Join-Path $gen 'tool-index.json')
+          if ($LASTEXITCODE -ne 0) { throw 'smoke tests failed' }
+
+  package:
+    name: package installer (self-hosted, needs Revit API)
+    needs: verify
+    # 需要一台装有 Revit 2027 的 self-hosted runner。
+    # 在仓库 Settings → Actions → Runner 配好后，把仓库变量 REVIT_RUNNER 设为 true。
+    if: vars.REVIT_RUNNER == 'true'
+    runs-on: [self-hosted, windows, revit-2027]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and package
+        shell: pwsh
+        run: |
+          ./build/build.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'build failed' }
+          ./build/package.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'package failed' }
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*.zip
+          generate_release_notes: true

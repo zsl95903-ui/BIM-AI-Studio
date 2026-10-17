@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 先读文档
+    url: https://github.com/zsl95903-ui/BIM-AI-Studio/blob/main/docs/migration.md
+    about: 升级、路径变化与常见问题

@@ -1,0 +1,25 @@
+name: Feature request
+description: 新工具、新流程或兼容性需求
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 想解决什么问题
+      description: 描述工作流，而不是先给实现方案
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 期望的行为
+  - type: dropdown
+    id: area
+    attributes:
+      label: 影响范围
+      options:
+        - 工具层
+        - 桥接协议
+        - Agent 技能
+        - 构建 / 安装
+        - 文档

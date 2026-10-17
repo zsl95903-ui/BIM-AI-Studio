@@ -1,0 +1,71 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  engine:
+    name: engine build + smoke tests
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build tool set generator
+        run: dotnet build clean-room-tools/tools/ToolSetGenerator/ToolSetGenerator.csproj -c Release --nologo
+
+      - name: Generate tool classes from contracts
+        shell: pwsh
+        run: |
+          $gen = Join-Path $env:RUNNER_TEMP 'generated'
+          dotnet run --project clean-room-tools/tools/ToolSetGenerator/ToolSetGenerator.csproj `
+            -c Release --nologo -- `
+            --catalog clean-room-tools/contracts/tool-contracts.json `
+            --out-tools $gen --namespace ExtToolLib
+          if ($LASTEXITCODE -ne 0) { throw "toolset generation failed" }
+
+      - name: Build smoke tests
+        run: dotnet build clean-room-tools/tests/RevitAi.Engine.SmokeTests/RevitAi.Engine.SmokeTests.csproj -c Release --nologo
+
+      - name: Run smoke tests
+        shell: pwsh
+        run: |
+          dotnet run --project clean-room-tools/tests/RevitAi.Engine.SmokeTests/RevitAi.Engine.SmokeTests.csproj `
+            -c Release --nologo -- `
+            --external clean-room-tools/contracts/external-tools.json `
+            --tool-index (Join-Path $env:RUNNER_TEMP 'generated/tool-index.json')
+          if ($LASTEXITCODE -ne 0) { throw "smoke tests failed" }
+
+  docs:
+    name: catalog and json validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate JSON files
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem -Recurse -File -Include *.json |
+            Where-Object { $_.FullName -notmatch '\\(bin|obj|node_modules)\\' }
+          $bad = 0
+          foreach ($f in $files) {
+            try { Get-Content -LiteralPath $f.FullName -Raw | ConvertFrom-Json | Out-Null }
+            catch { Write-Host "invalid json: $($f.FullName)"; $bad++ }
+          }
+          if ($bad -gt 0) { throw "$bad invalid json file(s)" }
+
+      - name: Check for absolute local paths
+        shell: pwsh
+        run: |
+          $hits = Get-ChildItem -Recurse -File -Include *.md,*.json,*.cs,*.ps1 |
+            Where-Object { $_.FullName -notmatch '\\(bin|obj)\\third_party\\' } |
+            Select-String -Pattern 'C:\\Users\\' -List
+          if ($hits) { $hits | ForEach-Object { Write-Host $_.Path }; throw 'absolute user paths found' }

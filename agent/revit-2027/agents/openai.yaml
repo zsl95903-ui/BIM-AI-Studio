@@ -1,0 +1,4 @@
+interface:
+  display_name: "Revit 2027 Control"
+  short_description: "Control local Revit 2027 through a safe named-pipe bridge"
+  default_prompt: "Use $revit-2027 to inspect or model in the open Revit 2027 document."

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RevitAddIns>
+  <AddIn Type="Application">
+    <Name>BIM-AI Studio Bridge</Name>
+    <Assembly>ReVitAIBridgeV1\ReVitAI.Bridge.dll</Assembly>
+    <AddInId>4f57d885-6c4f-4edf-a3a9-1e9f5ba5c7e1</AddInId>
+    <FullClassName>ReVitAI.Bridge.ReVitAIBridgeApplication</FullClassName>
+    <@@ExternalId@@>REVITAI</@@ExternalId@@>
+    <@@ExternalDescription@@>BIM-AI Studio - local typed automation bridge for Autodesk Revit.</@@ExternalDescription@@>
+  </AddIn>
+</RevitAddIns>
