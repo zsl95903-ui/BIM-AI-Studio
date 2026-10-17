@@ -62,7 +62,7 @@ public static class CoreServicesFactory
 		}
 		try
 		{
-			return new NullRemoteProfileClient();
+			return new RemoteProfileStub();
 		}
 		catch (Exception ex)
 		{

@@ -47,11 +47,11 @@ public interface IAuthManager
 
 	Task<Result<int>> GetRemainingTrialUsageAsync(string featureId);
 
-	decimal GetCachedUsageBalance();
+	decimal GetCachedCreditsBalance();
 
-	CombinedUsageInfo GetCachedUsageInfo();
+	CombinedCreditsInfo GetCachedCreditsInfo();
 
-	Task RefreshUsageCacheAsync();
+	Task RefreshCreditsCacheAsync();
 
 	Dictionary<string, int> GetCachedTrialUsage();
 
@@ -91,7 +91,7 @@ public interface IAuthManager
 
 	Task<Result> UnbindDeviceAsync(string deviceId);
 
-	Task<Result> InitializeUserUsageAsync();
+	Task<Result> InitializeUserCreditsAsync();
 
 	void SetCurrentRevitVersion(string versionYear);
 

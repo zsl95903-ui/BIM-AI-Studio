@@ -89,11 +89,11 @@ public sealed class LocalAuthManager : IAuthManager
 	public Task<Result<int>> GetRemainingTrialUsageAsync(string featureId)
 		=> Task.FromResult(Result<int>.Success(int.MaxValue));
 
-	public decimal GetCachedUsageBalance() => 0m;
+	public decimal GetCachedCreditsBalance() => 0m;
 
-	public CombinedUsageInfo GetCachedUsageInfo() => new CombinedUsageInfo();
+	public CombinedCreditsInfo GetCachedCreditsInfo() => new CombinedCreditsInfo();
 
-	public Task RefreshUsageCacheAsync() => Task.CompletedTask;
+	public Task RefreshCreditsCacheAsync() => Task.CompletedTask;
 
 	public Dictionary<string, int> GetCachedTrialUsage() => new Dictionary<string, int>(_trialUsage);
 
@@ -154,7 +154,7 @@ public sealed class LocalAuthManager : IAuthManager
 	public Task<Result> UnbindDeviceAsync(string deviceId)
 		=> Task.FromResult(Result.Success());
 
-	public Task<Result> InitializeUserUsageAsync()
+	public Task<Result> InitializeUserCreditsAsync()
 		=> Task.FromResult(Result.Success());
 
 	public void SetCurrentRevitVersion(string versionYear)
@@ -169,7 +169,7 @@ public sealed class LocalAuthManager : IAuthManager
 			HasValidLicense = true,
 			LicenseType = _license.LicenseType,
 			ExpiryDate = _license.ValidTo,
-			UsageBalance = 0m,
+			CreditsBalance = 0m,
 			TrialUsage = new Dictionary<string, int>(_trialUsage)
 		};
 	}
@@ -183,7 +183,7 @@ public sealed class LocalAuthManager : IAuthManager
 			HasValidLicense = true,
 			LicenseType = _license.LicenseType,
 			ExpiryDate = _license.ValidTo,
-			UsageBalance = 0m,
+			CreditsBalance = 0m,
 			TrialUsage = new Dictionary<string, int>(_trialUsage),
 			UserDevices = new List<IDeviceInfo>(_devices)
 		});

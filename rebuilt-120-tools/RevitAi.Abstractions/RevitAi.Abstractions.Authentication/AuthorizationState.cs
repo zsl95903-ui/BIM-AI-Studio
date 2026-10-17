@@ -11,7 +11,7 @@ public class AuthorizationState
 
 	public DateTime? ExpiryDate { get; set; }
 
-	public decimal UsageBalance { get; set; }
+	public decimal CreditsBalance { get; set; }
 
 	public Dictionary<string, int> TrialUsage { get; set; } = new Dictionary<string, int>();
 }
