@@ -56,6 +56,14 @@ internal sealed class GetAllFamiliesImplementation : IToolImplementation
         var service = adapter.FamilyQueryService ?? throw new InvalidOperationException("无法获取 FamilyQueryService");
         var document = ReadOnlySupport2.RequireDocument(adapter, context);
         var families = service.GetAllFamilies(document);
+        var categoryName = context.GetParameter<string?>("categoryName", null)
+                           ?? context.GetParameter<string?>("category_name", null);
+        if (!string.IsNullOrWhiteSpace(categoryName))
+        {
+            families = families
+                .Where(family => string.Equals(family.Category, categoryName, StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+        }
 
         return Task.FromResult(AIToolResult.Ok(
             $"✅ 成功获取 {families.Count} 个族",
@@ -69,6 +77,7 @@ internal sealed class GetAllFamiliesImplementation : IToolImplementation
                     typeCount = family.TypeCount,
                 }).ToArray(),
                 count = families.Count,
+                categoryName,
             }));
     }
 }
@@ -110,6 +119,9 @@ internal sealed class GetAllRoomsImplementation : IToolImplementation
         var service = adapter.RoomService ?? throw new InvalidOperationException("无法获取 RoomService");
         var document = ReadOnlySupport2.RequireDocument(adapter, context);
         var rooms = service.GetAllRooms(document);
+        var includeArea = context.GetParameter("includeArea", true);
+        var includeVolume = context.GetParameter("includeVolume", false);
+        var includePerimeter = context.GetParameter("includePerimeter", false);
 
         return Task.FromResult(AIToolResult.Ok(
             $"✅ 成功获取 {rooms.Count} 个房间",
@@ -120,8 +132,12 @@ internal sealed class GetAllRoomsImplementation : IToolImplementation
                     id = room.RoomId,
                     number = room.Number,
                     name = room.Name,
-                    area = room.AreaSquareMeters,
-                    unit = "square_meters",
+                    area = includeArea ? room.AreaSquareMeters : (double?)null,
+                    unit = includeArea ? "square_meters" : null,
+                    volume = includeVolume ? room.VolumeCubicMeters : null,
+                    volumeUnit = includeVolume ? "cubic_meters" : null,
+                    perimeter = includePerimeter ? room.PerimeterMeters : null,
+                    perimeterUnit = includePerimeter ? "meters" : null,
                     levelId = room.LevelId,
                     levelName = room.LevelName,
                 }).ToArray(),
@@ -162,13 +178,14 @@ internal sealed class GetElementLocationImplementation : IToolImplementation
     {
         var service = adapter.ElementQueryService ?? throw new InvalidOperationException("无法获取 ElementQueryService");
         var document = ReadOnlySupport2.RequireDocument(adapter, context);
-        var elementId = context.GetParameter("elementId", 0);
+        var elementId = context.GetParameter("elementId",
+            context.GetParameter("element_id", 0));
         if (elementId <= 0)
         {
             return Task.FromResult(AIToolResult.Fail("必须提供 elementId。"));
         }
 
-        var geometry = service.GetElementGeometry(document, elementId);
+        var geometry = service.GetElementGeometry(document, elementId, context.GetParameter("computeReferences", false));
         if (geometry is null)
         {
             return Task.FromResult(AIToolResult.Fail($"未找到元素 {elementId}。"));
@@ -226,6 +243,9 @@ internal sealed class GetElementGeometryImplementation : IToolImplementation
                     : null,
                 solidCount = geometry.SolidCount,
                 curveCount = geometry.CurveCount,
+                surfaceArea = geometry.SurfaceAreaSquareMeters,
+                areaType = context.GetParameter<string?>("areaType", "surface"),
+                computeReferences = context.GetParameter("computeReferences", false),
             }));
     }
 }
@@ -322,6 +342,7 @@ internal sealed class GetViewFiltersImplementation : IToolImplementation
         var service = adapter.ViewQueryService ?? throw new InvalidOperationException("无法获取 ViewQueryService");
         var document = ReadOnlySupport2.RequireDocument(adapter, context);
         var filters = service.GetViewFilters(document, ReadOnlySupport2.OptionalInt(context, "viewId"));
+        var includeRules = context.GetParameter("includeRules", false);
 
         return Task.FromResult(AIToolResult.Ok(
             $"✅ 当前视图共有 {filters.Count} 个过滤器",
@@ -333,8 +354,10 @@ internal sealed class GetViewFiltersImplementation : IToolImplementation
                     name = filter.Name,
                     enabled = filter.Enabled,
                     visible = filter.Visible,
+                    rules = includeRules ? filter.Rules : null,
                 }).ToArray(),
                 count = filters.Count,
+                includeRules,
             }));
     }
 }
@@ -354,7 +377,12 @@ internal sealed class GetCategoryVisibilityImplementation : IToolImplementation
             return Task.FromResult(AIToolResult.Fail("必须提供 categoryName（类别名称，如：墙、门、窗）。"));
         }
 
-        var visibility = service.GetCategoryVisibility(document, ReadOnlySupport2.OptionalInt(context, "viewId"), categoryName);
+        var viewId = ReadOnlySupport2.OptionalInt(context, "viewId");
+        if (viewId is null && context.Parameters.ContainsKey("view_id"))
+        {
+            viewId = ReadOnlySupport2.OptionalInt(context, "view_id");
+        }
+        var visibility = service.GetCategoryVisibility(document, viewId, categoryName);
         if (visibility is null)
         {
             return Task.FromResult(AIToolResult.Fail($"未找到类别 {categoryName} 或视图无效。"));

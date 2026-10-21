@@ -147,11 +147,52 @@ internal sealed class RoofService : IRoofService
                 levelId == ElementId.InvalidElementId ? string.Empty : doc.GetElement(levelId)?.Name ?? string.Empty,
                 Math.Round(area * SquareFeetToSquareMeters, 3),
                 roof is FootPrintRoof,
-                roof is ExtrusionRoof);
+                roof is ExtrusionRoof,
+                CountRoofEdges(roof));
         }
         catch (Exception)
         {
             return null;
+        }
+    }
+
+    private static int CountRoofEdges(RoofBase roof)
+    {
+        try
+        {
+            var count = 0;
+            var geometry = roof.get_Geometry(new Options
+            {
+                DetailLevel = ViewDetailLevel.Fine,
+                IncludeNonVisibleObjects = false,
+                ComputeReferences = false,
+            });
+            if (geometry is not null)
+            {
+                foreach (var item in geometry)
+                {
+                    if (item is Solid solid)
+                    {
+                        count += solid.Edges.Size;
+                    }
+                    else if (item is GeometryInstance instance)
+                    {
+                        foreach (var child in instance.GetInstanceGeometry())
+                        {
+                            if (child is Solid nested)
+                            {
+                                count += nested.Edges.Size;
+                            }
+                        }
+                    }
+                }
+            }
+
+            return count;
+        }
+        catch (Exception)
+        {
+            return 0;
         }
     }
 }

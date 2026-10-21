@@ -87,6 +87,16 @@ internal sealed class WorksetService : IWorksetService
 
         try
         {
+            var activeWorksetId = 0;
+            try
+            {
+                activeWorksetId = doc.GetWorksetTable().GetActiveWorksetId().IntegerValue;
+            }
+            catch (Exception)
+            {
+                // 非工作共享模型或没有活动工作集。
+            }
+
             return new FilteredWorksetCollector(doc)
                 .OfKind(WorksetKind.UserWorkset)
                 .Select(workset => new WorksetInfo(
@@ -94,7 +104,8 @@ internal sealed class WorksetService : IWorksetService
                     workset.Name,
                     workset.IsOpen,
                     workset.IsEditable,
-                    workset.Kind.ToString()))
+                    workset.Kind.ToString(),
+                    workset.Id.IntegerValue == activeWorksetId))
                 .ToArray();
         }
         catch (Exception)

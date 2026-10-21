@@ -44,7 +44,9 @@ public interface IViewCreationService
 
     int CreateSheet(object document, string? sheetNumber, string? sheetName);
 
-    int CreateTextNote(object document, string text, double xMm, double yMm, int? viewId);
+    int PlaceViewOnSheet(object document, int sheetId, int viewId, double xMm, double yMm);
+
+    int CreateTextNote(object document, string text, double xMm, double yMm, int? viewId, int? textTypeId = null, bool leader = false);
 }
 
 /// <summary>过滤器写入：action = apply / remove / set_visibility / set_color。</summary>
@@ -59,7 +61,8 @@ public interface IFilterService
         int red,
         int green,
         int blue,
-        bool visible);
+        bool visible,
+        int? patternId = null);
 
     bool DeleteFilter(object document, string filterName);
 }

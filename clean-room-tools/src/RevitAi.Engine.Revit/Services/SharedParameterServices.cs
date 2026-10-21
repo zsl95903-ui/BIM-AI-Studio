@@ -210,6 +210,35 @@ internal sealed class SharedParameterService : ISharedParameterService
         return current.Size;
     }
 
+    public int CountSharedParameterUsage(object document, string parameterName)
+    {
+        if (document is not Document doc || string.IsNullOrWhiteSpace(parameterName))
+        {
+            return 0;
+        }
+
+        var count = 0;
+        foreach (var element in new FilteredElementCollector(doc).WhereElementIsNotElementType())
+        {
+            try
+            {
+                if (element.Parameters.Cast<Parameter>().Any(parameter =>
+                        parameter.IsShared &&
+                        parameter.Definition is not null &&
+                        string.Equals(parameter.Definition.Name, parameterName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    count++;
+                }
+            }
+            catch (Exception)
+            {
+                // 某些元素参数不可枚举。
+            }
+        }
+
+        return count;
+    }
+
     private static DefinitionFile RequireFile(object document)
     {
         if (document is not Document doc)

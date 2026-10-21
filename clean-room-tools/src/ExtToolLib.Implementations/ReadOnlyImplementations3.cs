@@ -126,6 +126,22 @@ internal sealed class GetLinkElementsImplementation : IToolImplementation
 
         var limit = context.GetParameter("limit", 200);
         var elements = service.GetLinkElements(document, linkInstanceId, limit);
+        var categoryNames = ToolArgumentReader.ReadStrings(
+            new Dictionary<string, object?>(context.Parameters, StringComparer.OrdinalIgnoreCase),
+            "categoryNames");
+        var categoryName = context.GetParameter<string?>("categoryName", null)
+                           ?? context.GetParameter<string?>("category_name", null);
+        if (!string.IsNullOrWhiteSpace(categoryName))
+        {
+            categoryNames.Add(categoryName!);
+        }
+
+        if (categoryNames.Count > 0)
+        {
+            elements = elements
+                .Where(element => categoryNames.Contains(element.Category, StringComparer.OrdinalIgnoreCase))
+                .ToArray();
+        }
 
         return Task.FromResult(AIToolResult.Ok(
             $"✅ 链接 {linkInstanceId} 中读取 {elements.Count} 个元素",
@@ -141,6 +157,7 @@ internal sealed class GetLinkElementsImplementation : IToolImplementation
                 }).ToArray(),
                 count = elements.Count,
                 limit,
+                categoryNames,
             }));
     }
 }
@@ -155,7 +172,8 @@ internal sealed class GetRoofInfoImplementation : IToolImplementation
         var elementId = context.GetParameter("elementId", 0);
         if (elementId <= 0)
         {
-            elementId = context.GetParameter("roofId", 0);
+            elementId = context.GetParameter("roofId",
+                context.GetParameter("roof_id", 0));
         }
         if (elementId <= 0)
         {
@@ -179,6 +197,8 @@ internal sealed class GetRoofInfoImplementation : IToolImplementation
                 unit = "square_meters",
                 isFootprintRoof = roof.IsFootprintRoof,
                 isExtrusionRoof = roof.IsExtrusionRoof,
+                includeEdges = context.GetParameter("include_edges", false),
+                edgeCount = context.GetParameter("include_edges", false) ? roof.EdgeCount : 0,
             }));
     }
 }
@@ -192,7 +212,22 @@ internal sealed class GetAvailableFilterParametersImplementation : IToolImplemen
         var document = ReadOnlySupport3.RequireDocument(adapter, context);
 
         var categoryName = context.GetParameter<string?>("categoryName", null);
-        var parameters = service.GetAvailableFilterParameters(document, categoryName);
+        var categoryNames = ToolArgumentReader.ReadStrings(
+            new Dictionary<string, object?>(context.Parameters, StringComparer.OrdinalIgnoreCase),
+            "categoryNames");
+        if (!string.IsNullOrWhiteSpace(categoryName))
+        {
+            categoryNames.Add(categoryName!);
+        }
+
+        var parameters = categoryNames.Count == 0
+            ? service.GetAvailableFilterParameters(document, null)
+            : categoryNames
+                .SelectMany(name => service.GetAvailableFilterParameters(document, name))
+                .GroupBy(parameter => parameter.ParameterId)
+                .Select(group => group.First())
+                .OrderBy(parameter => parameter.Name, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
 
         return Task.FromResult(AIToolResult.Ok(
             $"✅ 可用过滤器参数 {parameters.Count} 个" + (string.IsNullOrWhiteSpace(categoryName) ? string.Empty : $"（类别：{categoryName}）"),
@@ -205,6 +240,7 @@ internal sealed class GetAvailableFilterParametersImplementation : IToolImplemen
                     name = parameter.Name,
                 }).ToArray(),
                 count = parameters.Count,
+                categoryNames,
             }));
     }
 }

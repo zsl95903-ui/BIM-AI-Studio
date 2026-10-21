@@ -22,6 +22,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="ACadSharp" Version="3.4.9" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Revit API 只能以二进制引用（第三方侧同样如此） -->
     <Reference Include="RevitAPI">
       <HintPath>$(RevitInstallDir)\RevitAPI.dll</HintPath>

@@ -63,7 +63,18 @@ internal sealed class QueryParameterInfoImplementation : IToolImplementation
         var service = adapter.ParameterService ?? throw new InvalidOperationException("无法获取 ParameterService");
         var document = ParameterArgs.RequireDocument(adapter, context);
 
-        var operation = (WriteArgs.Text(context, "operation") ?? "list").Trim().ToLowerInvariant();
+        var operationText = WriteArgs.Text(context, "operation");
+        if (string.IsNullOrWhiteSpace(operationText))
+        {
+            return Task.FromResult(AIToolResult.Fail("operation 参数不能为空"));
+        }
+
+        var operation = operationText.Trim().ToLowerInvariant();
+        if (operation is not ("get" or "schema" or "get_type"))
+        {
+            return Task.FromResult(AIToolResult.Fail("不支持的操作类型: " + operationText));
+        }
+
         var ids = ParameterArgs.ResolveElementIds(context);
         if (ids.Count == 0)
         {
@@ -78,13 +89,21 @@ internal sealed class QueryParameterInfoImplementation : IToolImplementation
             names.Add(singleName!);
         }
 
-        var includeType = WriteArgs.Flag(context, false, "includeTypeParameters", "include_type_parameters")
-                          || string.Equals(operation, "type", StringComparison.OrdinalIgnoreCase);
+        if (operation == "get_type" && names.Count == 0)
+        {
+            return Task.FromResult(AIToolResult.Fail("get_type 操作需要指定 parameterName"));
+        }
+
+        var includeType = operation is "schema" or "get_type"
+                          || WriteArgs.Flag(context, false, "includeTypeParameters", "include_type_parameters");
+        var queryNames = operation == "schema" ? new List<string>() : names;
 
         var results = new List<object>();
+        var records = new List<ParameterInfo>();
         foreach (var id in ids)
         {
-            var parameters = service.QueryParameters(document, id, names, includeType);
+            var parameters = service.QueryParameters(document, id, queryNames, includeType);
+            records.AddRange(parameters);
             results.Add(new
             {
                 elementId = id,
@@ -102,12 +121,39 @@ internal sealed class QueryParameterInfoImplementation : IToolImplementation
             });
         }
 
-        var total = results.Sum(_ => 0) + 0;
-        var message = names.Count > 0
-            ? $"✅ 已查询 {ids.Count} 个元素的参数（过滤：{string.Join('/', names)}）"
-            : $"✅ 已查询 {ids.Count} 个元素的参数";
+        var total = records.Count;
+        var message = operation switch
+        {
+            "get" when names.Count > 0 =>
+                $"✅ 成功获取 {ids.Count} 个元素的参数（过滤：{string.Join('/', names)}）",
+            "get" =>
+                $"✅ 成功获取 {ids.Count} 个元素的参数",
+            "schema" =>
+                $"📋 获取了 {ids.Count} 个元素的参数定义：总参数数量 {total}",
+            "get_type" =>
+                $"✅ 已查询参数 '{names[0]}' 的类型和只读状态",
+            _ => $"✅ 已查询 {ids.Count} 个元素的参数",
+        };
 
-        return Task.FromResult(AIToolResult.Ok(message, new { operation, elements = results, elementCount = ids.Count, total }));
+        var cacheId = string.Empty;
+        if (context.DataCache is not null && records.Count > 0)
+        {
+            cacheId = context.DataCache.Store(context.SessionId ?? "default", $"parameter_{operation}", records);
+        }
+
+        var data = new
+        {
+            operation,
+            elements = results,
+            elementCount = ids.Count,
+            total,
+            parameterNames = names,
+            cache_id = cacheId.Length == 0 ? null : cacheId,
+        };
+
+        return Task.FromResult(cacheId.Length == 0
+            ? AIToolResult.Ok(message, data)
+            : AIToolResult.OkWithCache(message, cacheId, data));
     }
 }
 

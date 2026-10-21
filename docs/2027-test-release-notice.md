@@ -5,7 +5,7 @@
 ## 包含内容
 
 - `releases/2027-test/RevitAI-Hybrid-Setup-5.0.0.exe`
-- `rebuilt-120-tools/`
+- `clean-room-tools/`
 - `worktree/`
 
 ## 风险提示

@@ -168,7 +168,18 @@ internal sealed class CreateFootprintRoofImplementation : IToolImplementation
             return Task.FromResult(AIToolResult.Fail("必须提供 level_id。"));
         }
 
-        var spec = new ProfileSpec(points, levelId, ModelingArgs.OptionalInt(item, "roof_type_id", "roofTypeId"));
+        var definesSlope = ModelingArgs.Flag(item, "defines_slope", ModelingArgs.Flag(item, "definesSlope"));
+        var slopeAngle = item.TryGetValue("slope_angle", out var slope) && slope is not null
+            ? ToolArgumentReader.ToDouble(slope)
+            : item.TryGetValue("slopeAngle", out var slopeAlias) && slopeAlias is not null
+                ? ToolArgumentReader.ToDouble(slopeAlias)
+                : (double?)null;
+        var spec = new ProfileSpec(
+            points,
+            levelId,
+            ModelingArgs.OptionalInt(item, "roof_type_id", "roofTypeId"),
+            definesSlope,
+            slopeAngle);
         var result = service.CreateFootprintRoofs(document, new List<ProfileSpec> { spec });
         return Task.FromResult(CreateGridImplementation.Result("足迹屋顶", result));
     }

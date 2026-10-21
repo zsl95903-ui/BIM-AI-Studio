@@ -12,13 +12,24 @@ public sealed record ElementSummary(
     int TypeId,
     string TypeName,
     int LevelId,
-    string LevelName);
+    string LevelName,
+    double? X = null,
+    double? Y = null,
+    double? Z = null,
+    bool IsElementType = false);
 
 public sealed record BoundaryLoopInfo(int Index, bool IsOuter, double LengthMm, IReadOnlyList<Point2> Points);
 
 public sealed record GridIntersectionInfo(bool Exists, double X, double Y, double Z, string Message);
 
-public sealed record ScheduleFieldInfo(int Index, string Name, string FieldType, bool IsHidden, string Heading);
+public sealed record ScheduleFieldInfo(
+    int Index,
+    string Name,
+    string FieldType,
+    bool IsHidden,
+    string Heading,
+    int ParameterId = 0,
+    string UniqueId = "");
 
 public sealed record ScheduleDataInfo(
     string ScheduleName,
@@ -27,7 +38,19 @@ public sealed record ScheduleDataInfo(
     int TotalRows,
     int ReturnedRows);
 
-public sealed record CollisionPairInfo(int SourceId, int TargetId, bool Intersects);
+public sealed record CollisionPairInfo(
+    int SourceId,
+    int TargetId,
+    bool Intersects,
+    int SourceDocumentIndex = 0,
+    int TargetDocumentIndex = 0,
+    int? SourceLinkInstanceId = null,
+    int? TargetLinkInstanceId = null,
+    string SourceCategory = "",
+    string TargetCategory = "",
+    string SourceTypeName = "",
+    string TargetTypeName = "",
+    IReadOnlyList<Point3>? CollisionPoints = null);
 
 public interface IAdvancedQueryService
 {
@@ -62,9 +85,19 @@ public interface IAdvancedQueryService
         int maxRows,
         bool includeHeader);
 
-    IReadOnlyList<CollisionPairInfo> CheckCollision(object document, IReadOnlyList<int> sourceIds, IReadOnlyList<int> targetIds);
+    IReadOnlyList<CollisionPairInfo> CheckCollision(
+        object document,
+        IReadOnlyList<int> sourceIds,
+        IReadOnlyList<int> targetIds,
+        int? sourceLinkInstanceId = null,
+        int? targetLinkInstanceId = null);
 
     bool DeleteLink(object document, int linkId);
+}
+
+public interface ISelectionQueryService
+{
+    IReadOnlyList<int> GetSelectedElementIds(object uiDocument);
 }
 
 public interface IProjectSettingsService

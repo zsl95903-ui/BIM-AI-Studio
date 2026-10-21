@@ -57,11 +57,19 @@ internal sealed class GetAllViewsImplementation : IToolImplementation
         var viewService = adapter.ViewService ?? throw new InvalidOperationException("无法获取 ViewService");
         var document = ReadOnlySupport.RequireDocument(adapter, context);
         var views = viewService.GetAllViews(document);
+        var viewType = WriteArgs.Text(context, "viewType", "view_type");
+        if (!string.IsNullOrWhiteSpace(viewType))
+        {
+            views = views
+                .Where(view => string.Equals(view.ViewType, viewType, StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+        }
 
         return Task.FromResult(AIToolResult.Ok(
             $"✅ 成功获取 {views.Count} 个视图",
             new
             {
+                viewType,
                 views = views.Select(view => new { id = view.Id, name = view.Name, viewType = view.ViewType, isTemplate = view.IsTemplate }).ToArray(),
                 count = views.Count,
             }));
@@ -117,6 +125,12 @@ internal sealed class GetAllWorksetsImplementation : IToolImplementation
         var worksetService = adapter.WorksetService ?? throw new InvalidOperationException("无法获取 WorksetService");
         var document = ReadOnlySupport.RequireDocument(adapter, context);
         var worksets = worksetService.GetAllWorksets(document);
+        var includeActive = WriteArgs.Flag(context, true, "includeActive", "include_active");
+        var includeUserCreated = WriteArgs.Flag(context, true, "includeUserCreated", "include_user_created");
+        worksets = worksets
+            .Where(workset => (includeActive || !workset.IsActive)
+                              && (includeUserCreated || !string.Equals(workset.Kind, "UserWorkset", StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
 
         return Task.FromResult(AIToolResult.Ok(
             $"✅ 成功获取 {worksets.Count} 个工作集",
@@ -129,6 +143,7 @@ internal sealed class GetAllWorksetsImplementation : IToolImplementation
                     isOpen = workset.IsOpen,
                     isEditable = workset.IsEditable,
                     kind = workset.Kind,
+                    isActive = workset.IsActive,
                 }).ToArray(),
                 count = worksets.Count,
             }));

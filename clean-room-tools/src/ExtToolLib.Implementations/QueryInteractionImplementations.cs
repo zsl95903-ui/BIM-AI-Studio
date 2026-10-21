@@ -65,7 +65,35 @@ internal static class QueryArgs
         typeName = element.TypeName,
         levelId = element.LevelId,
         levelName = element.LevelName,
+        location = element.X is null || element.Y is null || element.Z is null
+            ? null
+            : new { x = element.X, y = element.Y, z = element.Z, unit = "millimeters" },
+        isElementType = element.IsElementType,
     };
+
+    public static string StoreElements(AIToolContext context, string key, IReadOnlyList<ElementSummary> elements)
+    {
+        if (context.DataCache is null || elements.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var cached = elements.Select(element => new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["elementId"] = element.ElementId,
+            ["id"] = element.ElementId,
+            ["name"] = element.Name,
+            ["category"] = element.CategoryName,
+            ["typeId"] = element.TypeId,
+            ["typeName"] = element.TypeName,
+            ["levelId"] = element.LevelId,
+            ["levelName"] = element.LevelName,
+            ["x"] = element.X,
+            ["y"] = element.Y,
+            ["z"] = element.Z,
+        }).ToList();
+        return context.DataCache.Store(context.SessionId ?? "default", key, cached);
+    }
 }
 
 // 结构分析对照：Revit\AS\Tools\Revit\Net8\AI\Tools\ElementQueryTool.cs（元素查询）
@@ -76,24 +104,156 @@ internal sealed class ElementQueryImplementation : IToolImplementation
         var service = adapter.AdvancedQueryService ?? throw new InvalidOperationException("无法获取 AdvancedQueryService");
         var document = QueryArgs.RequireDocument(adapter, context);
 
-        var operation = (WriteArgs.Text(context, "operation") ?? "all").Trim();
-        var elements = service.QueryElements(
-            document,
-            operation,
-            QueryArgs.ResolveIds(context),
-            WriteArgs.Text(context, "categoryName", "category_name", "category"),
-            WriteArgs.OptionalInt(context, "typeId", "type_id"),
-            WriteArgs.Text(context, "typeName", "type_name"),
-            (int)WriteArgs.Number(context, 200, "limit"));
+        var operationText = WriteArgs.Text(context, "operation");
+        if (string.IsNullOrWhiteSpace(operationText))
+        {
+            return Task.FromResult(AIToolResult.Fail("必须指定 operation 参数"));
+        }
 
-        return Task.FromResult(AIToolResult.Ok(
-            $"✅ 查询到 {elements.Count} 个元素（operation={operation}）",
-            new
+        var operation = NormalizeOperation(operationText);
+        IReadOnlyList<ElementSummary> elements;
+        var requested = 0;
+        string message;
+
+        switch (operation)
+        {
+            case "by_id":
             {
-                operation,
-                count = elements.Count,
-                elements = elements.Select(QueryArgs.Summarize).ToArray(),
-            }));
+                var ids = QueryArgs.ResolveIds(context, "elementId", "elementIds");
+                if (ids.Count == 0 && WriteArgs.Text(context, "cacheId", "cache_id") is { } cachedId)
+                {
+                    ids = ResolveCachedIds(context, cachedId);
+                }
+
+                if (ids.Count == 0)
+                {
+                    return Task.FromResult(AIToolResult.Fail("by_id 操作需要提供 elementId 或 elementIds 参数"));
+                }
+
+                requested = ids.Count;
+                elements = service.QueryElements(document, "by_id", ids, null, null, null, ids.Count);
+                message = $"✅ 成功查询 {ids.Count} 个元素，找到 {elements.Count} 个";
+                if (ids.Count > elements.Count)
+                {
+                    message += $"，{ids.Count - elements.Count} 个未找到";
+                }
+
+                break;
+            }
+
+            case "selected":
+            {
+                var selection = adapter.SelectionQueryService
+                                ?? throw new InvalidOperationException("无法获取 SelectionService");
+                var uiDocument = adapter.GetActiveUiDocument()
+                                 ?? throw new InvalidOperationException("当前没有可用的 UIDocument");
+                var ids = selection.GetSelectedElementIds(uiDocument);
+                requested = ids.Count;
+                elements = ids.Count == 0
+                    ? Array.Empty<ElementSummary>()
+                    : service.QueryElements(document, "by_id", ids, null, null, null, ids.Count);
+                message = $"✅ 成功获取 {elements.Count} 个选中元素";
+                break;
+            }
+
+            case "by_category":
+            {
+                var category = WriteArgs.Text(context, "categoryName", "category_name", "category");
+                if (string.IsNullOrWhiteSpace(category))
+                {
+                    return Task.FromResult(AIToolResult.Fail("类别名称不能为空"));
+                }
+
+                elements = service.QueryElements(document, "by_category", Array.Empty<int>(), category, null, null, 10000);
+                requested = elements.Count;
+                message = $"✅ 找到 {elements.Count} 个 {category}";
+                break;
+            }
+
+            case "by_family_type":
+            {
+                var typeId = WriteArgs.OptionalInt(context, "typeId", "type_id") ?? 0;
+                if (typeId <= 0)
+                {
+                    return Task.FromResult(AIToolResult.Fail("typeId 必须大于 0"));
+                }
+
+                var familyService = adapter.FamilyQueryService
+                                    ?? throw new InvalidOperationException("无法获取 FamilyService");
+                var typeInfo = familyService.GetFamilyTypes(document, null, 10000)
+                    .FirstOrDefault(type => type.TypeId == typeId);
+                if (typeInfo is null)
+                {
+                    return Task.FromResult(AIToolResult.Fail($"找不到 ID 为 {typeId} 的族类型元素"));
+                }
+
+                var expectedTypeName = WriteArgs.Text(context, "typeName", "type_name");
+                if (!string.IsNullOrWhiteSpace(expectedTypeName) &&
+                    !string.Equals(expectedTypeName, typeInfo.TypeName, StringComparison.Ordinal))
+                {
+                    return Task.FromResult(AIToolResult.Fail(
+                        $"类型名称不匹配：期望 '{expectedTypeName}'，实际 '{typeInfo.TypeName}'"));
+                }
+
+                elements = service.QueryElements(
+                    document,
+                    "by_type",
+                    Array.Empty<int>(),
+                    typeInfo.Category,
+                    typeId,
+                    typeInfo.TypeName,
+                    10000);
+                requested = elements.Count;
+                message = $"✅ 找到 {elements.Count} 个使用类型 '{typeInfo.TypeName}' 的{typeInfo.Category}实例";
+                break;
+            }
+
+            default:
+                return Task.FromResult(AIToolResult.Fail("不支持的操作类型: " + operationText));
+        }
+
+        var cacheId = QueryArgs.StoreElements(context, $"element_query_{operation}", elements);
+        if (!string.IsNullOrEmpty(cacheId))
+        {
+            message += $"\n\n💡 在后续工具调用中使用 cacheId=\"{cacheId}\" 参数来操作这些元素";
+        }
+
+        var data = new
+        {
+            operation,
+            requested,
+            found = elements.Count,
+            count = elements.Count,
+            elements = elements.Take(50).Select(QueryArgs.Summarize).ToArray(),
+            cache_id = string.IsNullOrEmpty(cacheId) ? null : cacheId,
+            cache_info = string.IsNullOrEmpty(cacheId)
+                ? null
+                : new { cache_id = cacheId, total_items = elements.Count, returned_items = Math.Min(50, elements.Count) },
+        };
+
+        return Task.FromResult(string.IsNullOrEmpty(cacheId)
+            ? AIToolResult.Ok(message, data)
+            : AIToolResult.OkWithCache(message, cacheId, data));
+    }
+
+    private static string NormalizeOperation(string operation)
+        => operation.Trim().ToLowerInvariant() switch
+        {
+            "by_id" or "byid" or "id" or "ids" => "by_id",
+            "selected" or "selection" => "selected",
+            "by_category" or "bycategory" or "category" => "by_category",
+            "by_family_type" or "byfamilytype" or "by_type" or "bytype" or "type" => "by_family_type",
+            _ => operation.Trim().ToLowerInvariant(),
+        };
+
+    private static List<int> ResolveCachedIds(AIToolContext context, string cacheId)
+    {
+        if (context.GetCachedData<List<Dictionary<string, object?>>>(cacheId) is { } cached)
+        {
+            return ToolArgumentReader.ExtractIds(cached);
+        }
+
+        return context.GetCachedData<List<int>>(cacheId) ?? new List<int>();
     }
 }
 
@@ -327,34 +487,196 @@ internal sealed class CheckCollisionImplementation : IToolImplementation
         var service = adapter.AdvancedQueryService ?? throw new InvalidOperationException("无法获取 AdvancedQueryService");
         var document = QueryArgs.RequireDocument(adapter, context);
 
-        var sourceSpecified = context.Parameters.ContainsKey("source") || context.Parameters.ContainsKey("elementIds") || context.Parameters.ContainsKey("cacheId");
-        if (!sourceSpecified)
+        if (!context.Parameters.ContainsKey("source"))
         {
-            return Task.FromResult(AIToolResult.Fail("必须提供 source（源元素集合：id 数组或 cacheId）。"));
+            return Task.FromResult(AIToolResult.Fail("必须提供 source（元素 ID、ID 数组、缓存 ID 或类别名称）。"));
         }
 
-        var sources = WriteArgs.Ids(context, "source", "sourceIds", "elementIds");
-        var targets = WriteArgs.Ids(context, "target", "targetIds");
+        var sourceResolution = ResolveSelector(context, service, document, "source");
+        if (!string.IsNullOrWhiteSpace(sourceResolution.Error))
+        {
+            return Task.FromResult(AIToolResult.Fail("无法解析源元素：" + sourceResolution.Error));
+        }
+
+        var sources = sourceResolution.Ids;
+        if (sources.Count == 0)
+        {
+            return Task.FromResult(AIToolResult.Fail(
+                "无法解析源元素：请提供有效的元素 ID、ID 数组、缓存 ID 或类别名称"));
+        }
+
+        List<int> targets;
+        if (!context.Parameters.ContainsKey("target"))
+        {
+            targets = sources.ToList();
+        }
+        else
+        {
+            var targetResolution = ResolveSelector(context, service, document, "target");
+            if (!string.IsNullOrWhiteSpace(targetResolution.Error))
+            {
+                return Task.FromResult(AIToolResult.Fail("无法解析目标元素：" + targetResolution.Error));
+            }
+
+            targets = targetResolution.Ids;
+        }
+
         var sourceLink = WriteArgs.OptionalInt(context, "sourceLinkInstanceId", "source_link_instance_id");
         var targetLink = WriteArgs.OptionalInt(context, "targetLinkInstanceId", "target_link_instance_id");
 
-        var pairs = service.CheckCollision(document, sources, targets);
+        var pairs = service.CheckCollision(document, sources, targets, sourceLink, targetLink);
         var collisions = pairs.Where(pair => pair.Intersects).ToList();
+        var checkedPairs = Math.Max(pairs.Count, sources.Count * Math.Max(1, targets.Count));
+        var rate = checkedPairs == 0 ? 0 : Math.Round(collisions.Count * 100.0 / checkedPairs, 1);
+        var message = $"碰撞检查完成：共检查 {checkedPairs} 对元素，发现 {collisions.Count} 对存在碰撞（碰撞率 {rate}%）";
 
-        return Task.FromResult(AIToolResult.Ok(
-            collisions.Count == 0
-                ? $"✅ 未发现碰撞（检查 {pairs.Count} 组）"
-                : $"⚠️ 发现 {collisions.Count} 处碰撞",
-            new
+        var resultItems = collisions.Select(pair => new
+        {
+            sourceId = pair.SourceId,
+            targetId = pair.TargetId,
+            sourceDocument = pair.SourceDocumentIndex == 0 ? "主模型" : "链接模型",
+            targetDocument = pair.TargetDocumentIndex == 0 ? "主模型" : "链接模型",
+            sourceLinkInstanceId = pair.SourceLinkInstanceId,
+            targetLinkInstanceId = pair.TargetLinkInstanceId,
+            sourceCategory = pair.SourceCategory,
+            targetCategory = pair.TargetCategory,
+            sourceTypeName = pair.SourceTypeName,
+            targetTypeName = pair.TargetTypeName,
+            collisionPoints = pair.CollisionPoints,
+        }).ToList();
+
+        string? itemsCache = null;
+        string? pairsCache = null;
+        string? elementIdsCache = null;
+        if (context.DataCache is not null)
+        {
+            var session = context.SessionId ?? "default";
+            itemsCache = context.DataCache.Store(session, "collision_items", resultItems);
+            pairsCache = context.DataCache.Store(
+                session,
+                "collision_pairs",
+                collisions.Select(pair => new[] { pair.SourceId, pair.TargetId }).ToList());
+            elementIdsCache = context.DataCache.Store(
+                session,
+                "collision_element_ids",
+                collisions.SelectMany(pair => new[] { pair.SourceId, pair.TargetId }).Distinct().ToList());
+            message += $"\n\n💡 碰撞数据已分别缓存：\n- 着色使用：elements={elementIdsCache}"
+                       + $"\n- 创建视图使用：pairs={pairsCache}"
+                       + $"\n- 完整详情：items={itemsCache}";
+        }
+
+        var data = new
+        {
+            sourceCount = sources.Count,
+            targetCount = targets.Count,
+            checkedPairs,
+            collisionCount = collisions.Count,
+            collisionRate = rate,
+            collisions = resultItems.Take(50).ToArray(),
+            sourceLinkInstanceId = sourceLink,
+            targetLinkInstanceId = targetLink,
+            cache_info = itemsCache is null
+                ? null
+                : new
+                {
+                    items = itemsCache,
+                    pairs = pairsCache,
+                    element_ids = elementIdsCache,
+                    total_items = collisions.Count,
+                    returned_items = Math.Min(50, collisions.Count),
+                    truncated = collisions.Count > 50,
+                },
+        };
+
+        return Task.FromResult(itemsCache is null
+            ? AIToolResult.Ok(message, data)
+            : AIToolResult.OkWithCache(message, itemsCache, data));
+    }
+
+    private static (List<int> Ids, string? Error) ResolveSelector(
+        AIToolContext context,
+        IAdvancedQueryService service,
+        object document,
+        string key)
+    {
+        if (!context.Parameters.TryGetValue(key, out var value) || value is null)
+        {
+            return (new List<int>(), null);
+        }
+
+        try
+        {
+            switch (value)
             {
-                sourceCount = sources.Count,
-                targetCount = targets.Count,
-                collisionCount = collisions.Count,
-                collisions = collisions.Select(pair => new { sourceId = pair.SourceId, targetId = pair.TargetId }).ToArray(),
-                sourceLinkInstanceId = sourceLink,
-                targetLinkInstanceId = targetLink,
-                note = "链接模型内的元素暂不参与相交判定（第三方的 Link 版本需要链接文档上下文）。",
-            }));
+                case long or int or double or decimal:
+                    return (new List<int> { (int)ToolArgumentReader.ToDouble(value) }, null);
+
+                case string text:
+                    return ResolveSelectorText(context, service, document, text);
+
+                case List<object?> list:
+                {
+                    var ids = new List<int>();
+                    foreach (var item in list)
+                    {
+                        if (item is string itemText)
+                        {
+                            var resolved = ResolveSelectorText(context, service, document, itemText);
+                            if (!string.IsNullOrWhiteSpace(resolved.Error))
+                            {
+                                return resolved;
+                            }
+
+                            ids.AddRange(resolved.Ids);
+                        }
+                        else if (item is not null)
+                        {
+                            ids.Add((int)ToolArgumentReader.ToDouble(item));
+                        }
+                    }
+
+                    return (ids.Distinct().ToList(), null);
+                }
+
+                default:
+                    return (new List<int>(), $"不支持的 selector 类型 {value.GetType().Name}");
+            }
+        }
+        catch (Exception ex)
+        {
+            return (new List<int>(), ex.GetBaseException().Message);
+        }
+    }
+
+    private static (List<int> Ids, string? Error) ResolveSelectorText(
+        AIToolContext context,
+        IAdvancedQueryService service,
+        object document,
+        string text)
+    {
+        var value = text.Trim();
+        if (value.StartsWith("cache_", StringComparison.OrdinalIgnoreCase))
+        {
+            if (context.GetCachedData<List<Dictionary<string, object?>>>(value) is { } cached)
+            {
+                return (ToolArgumentReader.ExtractIds(cached), null);
+            }
+
+            if (context.GetCachedData<List<int>>(value) is { } cachedIds)
+            {
+                return (cachedIds.ToList(), null);
+            }
+
+            return (new List<int>(), $"缓存 ID '{value}' 无效或已过期");
+        }
+
+        if (int.TryParse(value, out var id))
+        {
+            return (new List<int> { id }, null);
+        }
+
+        var elements = service.QueryElements(document, "by_category", Array.Empty<int>(), value, null, null, 10000);
+        return (elements.Select(element => element.ElementId).Distinct().ToList(), null);
     }
 }
 

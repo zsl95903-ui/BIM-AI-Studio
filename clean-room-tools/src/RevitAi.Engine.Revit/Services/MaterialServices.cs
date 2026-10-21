@@ -81,7 +81,7 @@ internal sealed class MaterialService : IMaterialService
         return Describe(material);
     }
 
-    public bool Delete(object document, int? materialId, string? name)
+    public bool Delete(object document, int? materialId, string? name, bool force = false)
     {
         if (document is not Document doc)
         {
@@ -94,8 +94,108 @@ internal sealed class MaterialService : IMaterialService
             return false;
         }
 
+        if (!force && IsMaterialInUse(doc, material.Id))
+        {
+            throw new InvalidOperationException(
+                $"材质 '{material.Name}' 正在被元素使用，无法删除。如需强制删除，请设置 force=true。");
+        }
+
         doc.Delete(material.Id);
         return true;
+    }
+
+    public IReadOnlyList<ElementMaterialInfo> GetElementMaterials(object document, IReadOnlyList<int> elementIds)
+    {
+        if (document is not Document doc)
+        {
+            return Array.Empty<ElementMaterialInfo>();
+        }
+
+        var result = new List<ElementMaterialInfo>();
+        foreach (var elementId in elementIds.Distinct())
+        {
+            var element = doc.GetElement(new ElementId(elementId));
+            if (element is null)
+            {
+                result.Add(new ElementMaterialInfo(elementId, false, Array.Empty<MaterialInfo>()));
+                continue;
+            }
+
+            var materials = new Dictionary<int, MaterialInfo>();
+            foreach (var parameter in EnumerateParameters(element))
+            {
+                try
+                {
+                    if (parameter.StorageType != StorageType.ElementId || !parameter.HasValue)
+                    {
+                        continue;
+                    }
+
+                    if (doc.GetElement(parameter.AsElementId()) is Material material)
+                    {
+                        materials[(int)material.Id.Value] = Describe(material);
+                    }
+                }
+                catch (Exception)
+                {
+                    // 参数不可读时跳过。
+                }
+            }
+
+            result.Add(new ElementMaterialInfo(elementId, true, materials.Values.ToArray()));
+        }
+
+        return result;
+    }
+
+    private static IEnumerable<Parameter> EnumerateParameters(Element element)
+    {
+        foreach (Parameter parameter in element.Parameters)
+        {
+            yield return parameter;
+        }
+
+        var typeId = element.GetTypeId();
+        if (typeId is null || typeId == ElementId.InvalidElementId)
+        {
+            yield break;
+        }
+
+        var type = element.Document.GetElement(typeId);
+        if (type is null)
+        {
+            yield break;
+        }
+
+        foreach (Parameter parameter in type.Parameters)
+        {
+            yield return parameter;
+        }
+    }
+
+    private static bool IsMaterialInUse(Document document, ElementId materialId)
+    {
+        foreach (var element in new FilteredElementCollector(document).WhereElementIsNotElementType())
+        {
+            try
+            {
+                foreach (Parameter parameter in element.Parameters)
+                {
+                    if (parameter.StorageType == StorageType.ElementId &&
+                        parameter.HasValue &&
+                        parameter.AsElementId() == materialId)
+                    {
+                        return true;
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // 跳过不可访问参数。
+            }
+        }
+
+        return false;
     }
 
     internal static Material? Find(object? document, int? materialId, string? name)

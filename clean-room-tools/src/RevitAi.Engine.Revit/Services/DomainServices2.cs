@@ -1,5 +1,8 @@
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using ACadSharp;
+using ACadSharp.Entities;
+using ACadSharp.IO;
 
 namespace RevitAi.Engine.Revit.Services;
 
@@ -60,7 +63,7 @@ internal sealed class DomainExtraService : IDomainExtraService
             var end = outline[(index + 1) % outline.Count];
             if (start.DistanceTo(end) > 1e-6)
             {
-                loop.Append(Line.CreateBound(start, end));
+            loop.Append(Autodesk.Revit.DB.Line.CreateBound(start, end));
             }
         }
 
@@ -163,72 +166,387 @@ internal sealed class DomainExtraService : IDomainExtraService
         };
     }
 
-    public IReadOnlyList<CadLayerInfo> ManageCadLayers(object document, int viewId, int linkId, string operation, string? layerName)
+    public CadQueryResult QueryCad(object document, int linkId, string operation, string? layerName)
     {
         var doc = ModelingService.RequireDocument(document);
+        var import = doc.GetElement(new ElementId(linkId)) as ImportInstance
+                     ?? throw new InvalidOperationException($"未找到 ID 为 {linkId} 的 CAD 链接");
 
-        // viewId <= 0 表示未指定，按当前活动视图处理（第三方 schema 里 cad_layer_manager 没有 viewId 参数）。
-        var view = viewId > 0
-            ? doc.GetElement(new ElementId(viewId)) as View
-              ?? throw new InvalidOperationException($"未找到视图 {viewId}。")
-            : doc.ActiveView
-              ?? throw new InvalidOperationException("当前没有活动视图，无法控制 CAD 图层可见性。");
-
-        var element = doc.GetElement(new ElementId(linkId))
-                      ?? throw new InvalidOperationException($"未找到 CAD 链接/导入元素 {linkId}。");
-
-        var category = element switch
+        var normalized = (operation ?? "get_layers").Trim().ToLowerInvariant();
+        var parsed = TryParseCadFile(import, doc);
+        var source = "CAD 文件";
+        if (parsed is null)
         {
-            ImportInstance import => import.Category,
-            _ => element.Category,
-        } ?? throw new InvalidOperationException(
-            $"元素 {linkId}（{element.GetType().Name}）没有可枚举的类别，无法管理 CAD 图层。");
-
-        var layers = new List<Category>();
-        foreach (Category sub in category.SubCategories)
-        {
-            layers.Add(sub);
+            parsed = ReadCadGeometry(import, doc);
+            source = "几何对象";
         }
 
-        var normalized = (operation ?? "list").Trim().ToLowerInvariant();
-        var result = new List<CadLayerInfo>();
+        var layers = parsed.Layers;
+        var lines = string.IsNullOrWhiteSpace(layerName)
+            ? parsed.Lines
+            : parsed.Lines.Where(line => string.Equals(line.LayerName, layerName, StringComparison.OrdinalIgnoreCase)).ToList();
+        var texts = string.IsNullOrWhiteSpace(layerName)
+            ? parsed.Texts
+            : parsed.Texts.Where(text => string.Equals(text.LayerName, layerName, StringComparison.OrdinalIgnoreCase)).ToList();
+        var blocks = string.IsNullOrWhiteSpace(layerName)
+            ? parsed.Blocks
+            : parsed.Blocks.Where(block => string.Equals(block.LayerName, layerName, StringComparison.OrdinalIgnoreCase)).ToList();
+        var analysis = BuildCadAnalysis(layers, lines, texts, blocks);
+        var nonEmpty = analysis.Count(layer => layer.TotalCount > 0);
 
-        switch (normalized)
+        string? message = null;
+        if (normalized == "get_texts" && texts.Count == 0 && source == "几何对象")
         {
-            case "list":
-                foreach (var layer in layers)
-                {
-                    result.Add(new CadLayerInfo(layer.Name, (int)layer.Id.Value, !view.GetCategoryHidden(layer.Id)));
-                }
+            message = $"无法从图层 '{layerName}' 获取文字信息。请确保 CAD 文件通过链接方式导入，且原始 CAD 文件可访问。";
+        }
 
-                return result;
+        return new CadQueryResult(
+            normalized,
+            linkId,
+            source,
+            layers.Count,
+            nonEmpty,
+            normalized == "get_layers" ? layers : new List<CadLayerInfo>(),
+            normalized == "get_lines" ? lines : new List<CadLineInfo>(),
+            normalized == "get_texts" ? texts : new List<CadTextInfo>(),
+            normalized == "get_blocks" ? blocks : new List<CadBlockInfo>(),
+            normalized == "analyze" ? analysis : new List<CadAnalysisLayerInfo>(),
+            message);
+    }
 
-            case "show":
-            case "hide":
+    private sealed record ParsedCad(
+        List<CadLayerInfo> Layers,
+        List<CadLineInfo> Lines,
+        List<CadTextInfo> Texts,
+        List<CadBlockInfo> Blocks);
+
+    private static ParsedCad? TryParseCadFile(ImportInstance import, Document document)
+    {
+        try
+        {
+            var type = document.GetElement(import.GetTypeId()) as CADLinkType;
+            var reference = type?.GetExternalFileReference();
+            var path = reference is null
+                ? null
+                : ModelPathUtils.ConvertModelPathToUserVisiblePath(reference.GetAbsolutePath());
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
             {
-                var visible = normalized == "show";
-                var targets = string.IsNullOrWhiteSpace(layerName)
-                    ? layers
-                    : layers.Where(layer => string.Equals(layer.Name, layerName, StringComparison.OrdinalIgnoreCase)).ToList();
-
-                if (targets.Count == 0)
-                {
-                    throw new InvalidOperationException(
-                        $"CAD 图层里没有名为 {layerName} 的图层（可用 operation=list 查询，共 {layers.Count} 个图层）。");
-                }
-
-                foreach (var layer in targets)
-                {
-                    view.SetCategoryHidden(layer.Id, !visible);
-                    result.Add(new CadLayerInfo(layer.Name, (int)layer.Id.Value, visible));
-                }
-
-                return result;
+                return null;
             }
 
-            default:
-                throw new InvalidOperationException("operation 只支持 list / show / hide。");
+            var extension = Path.GetExtension(path).ToLowerInvariant();
+            CadDocument cad = extension == ".dwg"
+                ? DwgReader.Read(path, null)
+                : DxfReader.Read(path, null);
+            var conversion = ReadCadConversionFactor(type);
+            var layers = cad.Layers
+                .Select(layer => new CadLayerInfo(
+                    layer.Name,
+                    null,
+                    layer.IsOn,
+                    layer.Color.Index,
+                    false,
+                    layer.LineType?.Name))
+                .ToList();
+            var lines = new List<CadLineInfo>();
+            var texts = new List<CadTextInfo>();
+            var blocks = new List<CadBlockInfo>();
+
+            foreach (var entity in cad.Entities)
+            {
+                var layer = entity.Layer?.Name ?? "0";
+                switch (entity)
+                {
+                    case ACadSharp.Entities.Line line:
+                        lines.Add(new CadLineInfo(
+                            layer,
+                            "Line",
+                            line.StartPoint.X * conversion,
+                            line.StartPoint.Y * conversion,
+                            line.StartPoint.Z * conversion,
+                            line.EndPoint.X * conversion,
+                            line.EndPoint.Y * conversion,
+                            line.EndPoint.Z * conversion));
+                        break;
+
+                    case LwPolyline polyline:
+                        for (var index = 0; index < polyline.Vertices.Count - 1; index++)
+                        {
+                            var start = polyline.Vertices[index].Location;
+                            var end = polyline.Vertices[index + 1].Location;
+                            lines.Add(new CadLineInfo(
+                                layer,
+                                "LwPolyline",
+                                start.X * conversion,
+                                start.Y * conversion,
+                                0,
+                                end.X * conversion,
+                                end.Y * conversion,
+                                0));
+                        }
+
+                        break;
+
+                    case ACadSharp.Entities.Arc arc:
+                        AddArc(lines, layer, arc.Center, arc.Radius, arc.StartAngle, arc.EndAngle, conversion);
+                        break;
+
+                    case Circle circle:
+                        lines.Add(new CadLineInfo(
+                            layer,
+                            "Circle",
+                            (circle.Center.X - circle.Radius) * conversion,
+                            circle.Center.Y * conversion,
+                            circle.Center.Z * conversion,
+                            (circle.Center.X + circle.Radius) * conversion,
+                            circle.Center.Y * conversion,
+                            circle.Center.Z * conversion));
+                        break;
+
+                    case TextEntity text:
+                        texts.Add(new CadTextInfo(
+                            layer,
+                            text.Value,
+                            text.InsertPoint.X * conversion,
+                            text.InsertPoint.Y * conversion,
+                            text.InsertPoint.Z * conversion,
+                            text.Height * conversion,
+                            text.Value.Length * text.Height * text.WidthFactor * conversion,
+                            text.Rotation));
+                        break;
+
+                    case MText text:
+                        texts.Add(new CadTextInfo(
+                            layer,
+                            text.PlainText ?? text.Value ?? string.Empty,
+                            text.InsertPoint.X * conversion,
+                            text.InsertPoint.Y * conversion,
+                            text.InsertPoint.Z * conversion,
+                            text.Height * conversion,
+                            Math.Max(text.RectangleWidth, text.HorizontalWidth) * conversion,
+                            text.Rotation));
+                        break;
+
+                    case Insert insert:
+                        blocks.Add(new CadBlockInfo(
+                            layer,
+                            insert.Block?.Name ?? string.Empty,
+                            insert.InsertPoint.X * conversion,
+                            insert.InsertPoint.Y * conversion,
+                            insert.InsertPoint.Z * conversion,
+                            insert.XScale,
+                            insert.YScale,
+                            insert.ZScale,
+                            insert.Rotation));
+                        break;
+                }
+            }
+
+            return new ParsedCad(layers, lines, texts, blocks);
         }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private static double ReadCadConversionFactor(CADLinkType? type)
+    {
+        if (type is null)
+        {
+            return 1.0;
+        }
+
+        var parameter = type.Parameters
+            .Cast<Parameter>()
+            .FirstOrDefault(item =>
+                item.Definition.Name.Contains("导入单位", StringComparison.OrdinalIgnoreCase)
+                || item.Definition.Name.Contains("Import Units", StringComparison.OrdinalIgnoreCase)
+                || item.Definition.Name.Equals("Unit", StringComparison.OrdinalIgnoreCase));
+        if (parameter is null || !parameter.HasValue)
+        {
+            return 1.0;
+        }
+
+        if (parameter.StorageType == StorageType.String)
+        {
+            var text = (parameter.AsString() ?? string.Empty).ToLowerInvariant();
+            if (text.Contains("inch") || text.Contains("英寸"))
+            {
+                return 25.4;
+            }
+
+            if (text.Contains("centimeter") || text.Contains("厘米"))
+            {
+                return 10;
+            }
+
+            if (text.Contains("meter") || text.Contains("米"))
+            {
+                return 1000;
+            }
+
+            if (text.Contains("feet") || text.Contains("英尺"))
+            {
+                return 304.8;
+            }
+        }
+
+        return 1.0;
+    }
+
+    private static void AddArc(
+        ICollection<CadLineInfo> target,
+        string layer,
+        dynamic center,
+        double radius,
+        double startAngle,
+        double endAngle,
+        double conversion)
+    {
+        target.Add(new CadLineInfo(
+            layer,
+            "Arc",
+            (center.X + radius * Math.Cos(startAngle)) * conversion,
+            (center.Y + radius * Math.Sin(startAngle)) * conversion,
+            center.Z * conversion,
+            (center.X + radius * Math.Cos(endAngle)) * conversion,
+            (center.Y + radius * Math.Sin(endAngle)) * conversion,
+            center.Z * conversion));
+    }
+
+    private static ParsedCad ReadCadGeometry(ImportInstance import, Document document)
+    {
+        var layers = new Dictionary<string, CadLayerInfo>(StringComparer.OrdinalIgnoreCase);
+        var lines = new List<CadLineInfo>();
+        var blocks = new List<CadBlockInfo>();
+        var geometry = import.get_Geometry(new Options
+        {
+            DetailLevel = ViewDetailLevel.Fine,
+            IncludeNonVisibleObjects = true,
+            ComputeReferences = false,
+        });
+
+        if (geometry is not null)
+        {
+            TraverseGeometry(document, geometry, layers, lines, blocks);
+        }
+
+        return new ParsedCad(
+            layers.Values.OrderBy(layer => layer.Name, StringComparer.OrdinalIgnoreCase).ToList(),
+            lines,
+            new List<CadTextInfo>(),
+            blocks);
+    }
+
+    private static void TraverseGeometry(
+        Document document,
+        GeometryElement geometry,
+        IDictionary<string, CadLayerInfo> layers,
+        ICollection<CadLineInfo> lines,
+        ICollection<CadBlockInfo> blocks)
+    {
+        foreach (var item in geometry)
+        {
+            var layerName = ResolveLayerName(document, item);
+            if (!string.IsNullOrWhiteSpace(layerName) && !layers.ContainsKey(layerName))
+            {
+                layers[layerName] = new CadLayerInfo(layerName, null, true);
+            }
+
+            switch (item)
+            {
+                case Curve curve:
+                {
+                    var start = curve.GetEndPoint(0);
+                    var end = curve.GetEndPoint(1);
+                    lines.Add(new CadLineInfo(
+                        layerName ?? "0",
+                        curve is Autodesk.Revit.DB.Line ? "Line" : curve.GetType().Name,
+                        Math.Round(start.X * 304.8, 3),
+                        Math.Round(start.Y * 304.8, 3),
+                        Math.Round(start.Z * 304.8, 3),
+                        Math.Round(end.X * 304.8, 3),
+                        Math.Round(end.Y * 304.8, 3),
+                        Math.Round(end.Z * 304.8, 3)));
+                    break;
+                }
+                case GeometryInstance instance:
+                {
+                    var origin = instance.Transform.Origin;
+                    blocks.Add(new CadBlockInfo(
+                        layerName ?? "0",
+                        "CAD Block",
+                        Math.Round(origin.X * 304.8, 3),
+                        Math.Round(origin.Y * 304.8, 3),
+                        Math.Round(origin.Z * 304.8, 3)));
+                    TraverseGeometry(document, instance.GetInstanceGeometry(), layers, lines, blocks);
+                    break;
+                }
+            }
+        }
+    }
+
+    private static string? ResolveLayerName(Document document, GeometryObject geometry)
+    {
+        try
+        {
+            if (geometry.GraphicsStyleId == ElementId.InvalidElementId)
+            {
+                return null;
+            }
+
+            var style = document.GetElement(geometry.GraphicsStyleId) as GraphicsStyle;
+            return style?.GraphicsStyleCategory?.Name;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private static List<CadAnalysisLayerInfo> BuildCadAnalysis(
+        IReadOnlyList<CadLayerInfo> layers,
+        IReadOnlyList<CadLineInfo> lines,
+        IReadOnlyList<CadTextInfo> texts,
+        IReadOnlyList<CadBlockInfo> blocks)
+    {
+        return layers.Select(layer =>
+        {
+            var lineCount = lines.Count(line => string.Equals(line.LayerName, layer.Name, StringComparison.OrdinalIgnoreCase));
+            var textCount = texts.Count(text => string.Equals(text.LayerName, layer.Name, StringComparison.OrdinalIgnoreCase));
+            var blockCount = blocks.Count(block => string.Equals(block.LayerName, layer.Name, StringComparison.OrdinalIgnoreCase));
+            var total = lineCount + textCount + blockCount;
+            var summary = new List<string>();
+            if (blockCount > 0)
+            {
+                summary.Add($"图块({blockCount})");
+            }
+
+            if (lineCount > 0)
+            {
+                summary.Add($"线条({lineCount})");
+            }
+
+            if (textCount > 0)
+            {
+                summary.Add($"文字({textCount})");
+            }
+
+            return new CadAnalysisLayerInfo(
+                layer.Name,
+                blockCount,
+                lineCount,
+                textCount,
+                total,
+                total == 0,
+                layer.ColorIndex,
+                layer.Visible,
+                layer.IsLocked,
+                summary);
+        })
+        .OrderByDescending(layer => layer.TotalCount)
+        .ToList();
     }
 
     public CutOrderResult FixCuttingOrder(

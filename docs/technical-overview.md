@@ -45,7 +45,7 @@ Revit API 的对象模型具有线程亲和性，绝大多数读写必须在应�
 
 | 仓库 | 职责 | 关键目录 |
 | --- | --- | --- |
-| `BIM-AI-Studio` | 工具契约、注册表、服务层、120 个工具源码 | `rebuilt-120-tools/`、`clean-room-tools/`、`src/ReVitAI.Bridge/`、`agent/revit-2027/` |
+| `BIM-AI-Studio` | 工具契约、注册表、服务层、120 个工具源码 | `clean-room-tools/`、`src/ReVitAI.Bridge/`、`agent/revit-2027/` |
 | `BIM-AI-Studio-App` | 加载入口、上层界面、模型接入、PDF 处理 | `host/hybrid-ui/`、`host/production-bridge/`、`src/RevitAi.*/` |
 
 应用层通过 git submodule 引用工具层源码，不依赖预编译产物。

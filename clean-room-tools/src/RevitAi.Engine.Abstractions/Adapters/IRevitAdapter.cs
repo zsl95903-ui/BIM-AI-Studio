@@ -106,6 +106,8 @@ public interface IRevitAdapter
     // ---- 查询与交互 ----
     IAdvancedQueryService? AdvancedQueryService { get; }
 
+    ISelectionQueryService? SelectionQueryService { get; }
+
     IProjectSettingsService? ProjectSettingsService { get; }
 
     // ---- 批次 5 第一批：地形 / 保温 / MEP 系统 ----

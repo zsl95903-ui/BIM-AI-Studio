@@ -8,7 +8,7 @@ The bridge exists to make Revit automation explicit, typed, observable, and reco
 
 - `agent/revit-2027`: Codex skill - discovery script, tool invocation, modeling recipes.
 - `clean-room-tools`: standalone engine - contracts, registry, host, services, smoke tests.
-- `rebuilt-120-tools`: 120-tool source set, tool layer only (tools + services + contracts).
+- `clean-room-tools`: Apache-2.0 120-tool source set, contracts, generated tools, services and tests.
 - `ReVitAI.Bridge`: Revit add-in host and `ToolDispatcher`.
 - `BridgeServer`: current-user Named Pipe server and discovery file.
 - `ExternalEventInvoker`: moves requests onto the Revit API thread.

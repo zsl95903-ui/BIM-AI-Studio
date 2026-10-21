@@ -26,7 +26,7 @@ internal sealed class CreateSpotDimensionImplementation : IToolImplementation
         var service = adapter.DimensionCreationService ?? throw new InvalidOperationException("无法获取 DimensionCreationService");
         var document = WriteArgs.RequireDocument(adapter, context);
 
-        var kind = WriteArgs.Text(context, "operator", "kind") ?? "elevation";
+        var kind = WriteArgs.Text(context, "operator", "kind") ?? "SPOT_ELEVATION";
         var elementId = WriteArgs.OptionalInt(context, "elementId", "element_id");
         if (elementId is null || elementId <= 0)
         {
@@ -34,6 +34,8 @@ internal sealed class CreateSpotDimensionImplementation : IToolImplementation
         }
 
         var point = WriteArgs.Point(context, (0, 0, 0), "point", "position");
+        var bend = WriteArgs.Point(context, (point.X, point.Y, point.Z), "bend");
+        var end = WriteArgs.Point(context, (point.X, point.Y, point.Z), "end");
         var dimensionId = service.CreateSpotDimension(
             document,
             kind,
@@ -42,11 +44,25 @@ internal sealed class CreateSpotDimensionImplementation : IToolImplementation
             point.X,
             point.Y,
             WriteArgs.OptionalInt(context, "spotDimensionTypeId", "spot_dimension_type_id"),
-            WriteArgs.Flag(context, false, "hasLeader", "has_leader"));
+            WriteArgs.Flag(context, true, "hasLeader", "has_leader"),
+            bend.X,
+            bend.Y,
+            bend.Z,
+            end.X,
+            end.Y,
+            end.Z);
 
         return Task.FromResult(AIToolResult.Ok(
             $"✅ 已创建点标注 {dimensionId}（{kind}）",
-            new { dimensionId, kind, elementId = elementId.Value, position = new { x = point.X, y = point.Y, unit = "millimeters" } }));
+            new
+            {
+                dimensionId,
+                kind,
+                elementId = elementId.Value,
+                position = new { x = point.X, y = point.Y, z = point.Z, unit = "millimeters" },
+                bend = new { x = bend.X, y = bend.Y, z = bend.Z, unit = "millimeters" },
+                end = new { x = end.X, y = end.Y, z = end.Z, unit = "millimeters" },
+            }));
     }
 }
 
@@ -71,6 +87,11 @@ internal sealed class EditScheduleImplementation : IToolImplementation
         var replaceFields = WriteArgs.Flag(context, false, "replaceFields", "replace_fields");
         var sortByParameterId = WriteArgs.OptionalInt(context, "sortByParameterId", "sort_by_parameter_id");
         var groupByParameterId = WriteArgs.OptionalInt(context, "groupByParameterId", "group_by_parameter_id");
+        var filterFieldParameterId = ExportArgs.ParseParameterId(
+            WriteArgs.Text(context, "filterFieldParameterId", "filter_field_parameter_id"));
+        var filterType = WriteArgs.Text(context, "filterType", "filter_type");
+        var filterValue = WriteArgs.Text(context, "filterValue", "filter_value");
+        var showGroupHeader = WriteArgs.Flag(context, true, "showGroupHeader", "show_group_header");
 
         var id = service.EditSchedule(
             document,
@@ -81,7 +102,11 @@ internal sealed class EditScheduleImplementation : IToolImplementation
             replaceFields,
             sortByParameterId,
             WriteArgs.Text(context, "sortOrder", "sort_order"),
-            groupByParameterId);
+            groupByParameterId,
+            filterFieldParameterId,
+            filterType,
+            filterValue,
+            showGroupHeader);
 
         return Task.FromResult(AIToolResult.Ok(
             $"✅ 明细表 {id} 已更新（新增 {addFieldParameterIds.Count} 字段，移除 {removeFieldParameterIds.Count} 字段，replaceFields={replaceFields}）",

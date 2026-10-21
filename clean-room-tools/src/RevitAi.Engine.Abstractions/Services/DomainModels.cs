@@ -22,6 +22,21 @@ public sealed record InsulationInfo(
     string MaterialName,
     int LayerIndex);
 
+public sealed record InsulationMutationResult(
+    string Operation,
+    int Requested,
+    int SuccessCount,
+    int UpdatedCount,
+    int SkippedCount,
+    int FailedCount,
+    IReadOnlyList<int> AffectedElementIds,
+    IReadOnlyList<int> SkippedElementIds,
+    IReadOnlyList<string> Errors,
+    double? ThicknessMm,
+    string? MaterialName,
+    int? SystemTypeId,
+    string ElementKind);
+
 public sealed record MepSystemInfo(
     int SystemId,
     string Name,
@@ -31,6 +46,33 @@ public sealed record MepSystemInfo(
     IReadOnlyList<int> MemberIds,
     int UninsulatedMemberCount,
     IReadOnlyDictionary<string, int> SizeDistribution);
+
+public sealed record MepSystemTypeInfo(
+    int SystemTypeId,
+    string Name,
+    string Classification,
+    string ElementKind,
+    int ElementCount,
+    int InsulatedCount,
+    int UninsulatedCount,
+    bool IsInUse,
+    bool CanBeDeleted,
+    bool CanBeRenamed,
+    bool CanBeCopied,
+    double CoverageRate);
+
+public sealed record MepSystemQueryResult(
+    string Operation,
+    string Target,
+    IReadOnlyList<MepSystemTypeInfo> Systems,
+    IReadOnlyList<int> ElementIds,
+    IReadOnlyDictionary<string, int> Breakdown,
+    IReadOnlyDictionary<string, int> SizeDistribution,
+    IReadOnlyDictionary<string, object?>? Properties,
+    int TotalCount,
+    int InUseCount,
+    int UnusedCount,
+    string? Message);
 
 public interface ITopographyService
 {
@@ -47,20 +89,41 @@ public interface IInsulationService
         bool onlyUninsulated,
         int limit);
 
-    int ManageInsulation(
+    InsulationMutationResult ManageInsulation(
         object document,
         string operation,
         IReadOnlyList<int> elementIds,
         double? thicknessMm,
         string? materialName,
-        bool overrideExisting);
+        bool overrideExisting,
+        int? systemTypeId);
+
+    IReadOnlyList<InsulationInfo> QueryMepInsulation(
+        object document,
+        IReadOnlyList<int> elementIds,
+        string target,
+        bool onlyUninsulated,
+        int limit);
+
+    IReadOnlyList<string> ListInsulationTypes(object document, string target);
 }
 
 public interface IMepSystemService
 {
-    IReadOnlyList<MepSystemInfo> QuerySystems(object document, string operation, int? systemTypeId, bool onlyUninsulated, int limit);
+    MepSystemQueryResult QueryMepSystems(
+        object document,
+        string operation,
+        string target,
+        int? systemTypeId,
+        bool onlyUninsulated,
+        bool includeSizeDistribution,
+        bool includeCategoryBreakdown,
+        bool includeFittings,
+        int limit);
 
     MepSystemInfo? CreateSystem(object document, int systemTypeId, string? newName);
+
+    MepSystemInfo? DuplicateSystem(object document, int sourceSystemTypeId, string newName);
 
     int RenameSystem(object document, int systemId, string newName);
 

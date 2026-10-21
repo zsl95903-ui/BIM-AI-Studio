@@ -1,5 +1,6 @@
 using RevitAi.Engine.Abstractions;
 using RevitAi.Engine.Abstractions.Adapters;
+using RevitAi.Engine.Abstractions.Services;
 using RevitAi.Engine.Core;
 
 namespace ExtToolLib.Implementations;
@@ -56,6 +57,32 @@ internal static class ExportArgs
         }
 
         return ids;
+    }
+
+    public static int? ParseParameterId(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        return int.TryParse(value, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var id)
+            ? id
+            : null;
+    }
+
+    public static List<int> ReadParameterIds(AIToolContext context, params string[] keys)
+    {
+        var parameters = new Dictionary<string, object?>(context.Parameters, StringComparer.OrdinalIgnoreCase);
+        var texts = keys
+            .SelectMany(key => ToolArgumentReader.ReadStrings(parameters, key))
+            .ToList();
+        return texts
+            .Select(ParseParameterId)
+            .Where(id => id is not null)
+            .Select(id => id!.Value)
+            .Distinct()
+            .ToList();
     }
 }
 
@@ -134,12 +161,22 @@ internal sealed class CreateTagImplementation : IToolImplementation
         var document = ExportArgs.RequireDocument(adapter, context);
 
         var elementId = WriteArgs.OptionalInt(context, "elementId", "element_id");
+        var batchMode = WriteArgs.Flag(context, false, "batchMode", "batch_mode")
+                        || context.Parameters.ContainsKey("categoryNames")
+                        || elementId is null;
+        if (batchMode)
+        {
+            return Task.FromResult(CreateBatchTags(adapter, context, document));
+        }
+
         if (elementId is null || elementId <= 0)
         {
-            var batchMode = WriteArgs.Flag(context, false, "batchMode", "batch_mode");
-            return Task.FromResult(AIToolResult.Fail(batchMode
-                ? "本实现暂不支持 batchMode（按类别批量标注）；请提供 elementId 逐个标注。"
-                : "必须提供 elementId。"));
+            return Task.FromResult(AIToolResult.Fail("单个模式必须提供 elementId 参数"));
+        }
+
+        if (!context.Parameters.ContainsKey("position"))
+        {
+            return Task.FromResult(AIToolResult.Fail("单个模式必须提供 position 参数（包含 x/y 坐标）"));
         }
 
         var position = WriteArgs.Point(context, (0, 0, 0), "position", "location");
@@ -157,6 +194,109 @@ internal sealed class CreateTagImplementation : IToolImplementation
             $"✅ 已为元素 {elementId} 创建标记 {tagId}",
             new { tagId, elementId, position = new { x = position.X, y = position.Y, unit = "millimeters" } }));
     }
+
+    private static AIToolResult CreateBatchTags(IRevitAdapter adapter, AIToolContext context, object document)
+    {
+        var tagService = adapter.TagCreationService
+                         ?? throw new InvalidOperationException("无法获取 TagCreationService");
+        var queryService = adapter.AdvancedQueryService
+                           ?? throw new InvalidOperationException("无法获取 AdvancedQueryService");
+        var viewService = adapter.ViewService
+                          ?? throw new InvalidOperationException("无法获取 ViewService");
+        var tagQueryService = adapter.TagService
+                              ?? throw new InvalidOperationException("无法获取 TagService");
+
+        var viewId = WriteArgs.OptionalInt(context, "viewId", "view_id");
+        var viewName = WriteArgs.Text(context, "viewName", "view_name");
+        if (viewId is null && !string.IsNullOrWhiteSpace(viewName))
+        {
+            viewId = viewService.GetAllViews(document)
+                .FirstOrDefault(view => string.Equals(view.Name, viewName, StringComparison.OrdinalIgnoreCase))
+                ?.Id;
+        }
+
+        viewId ??= viewService.GetActiveView(document)?.Id;
+        if (viewId is null)
+        {
+            return AIToolResult.Fail("无法确定批量标记的目标视图，请提供 viewId 或 viewName。");
+        }
+
+        var categoryNames = ToolArgumentReader.ReadStrings(
+            new Dictionary<string, object?>(context.Parameters, StringComparer.OrdinalIgnoreCase),
+            "categoryNames");
+        categoryNames = categoryNames
+            .SelectMany(name => name.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var candidates = new List<ElementSummary>();
+        if (categoryNames.Count == 0)
+        {
+            candidates.AddRange(queryService.QueryElements(document, "all", Array.Empty<int>(), null, null, null, 5000));
+        }
+        else
+        {
+            foreach (var categoryName in categoryNames)
+            {
+                candidates.AddRange(queryService.QueryElements(
+                    document,
+                    "by_category",
+                    Array.Empty<int>(),
+                    categoryName,
+                    null,
+                    null,
+                    5000));
+            }
+        }
+
+        candidates = candidates.GroupBy(element => element.ElementId).Select(group => group.First()).ToList();
+        var includeTagged = WriteArgs.Flag(context, false, "includeTagged", "include_tagged");
+        var taggedIds = includeTagged
+            ? new HashSet<int>()
+            : tagQueryService.GetAllTags(document)
+                .Where(tag => tag.TaggedElementId is not null)
+                .Select(tag => tag.TaggedElementId!.Value)
+                .ToHashSet();
+        var targets = candidates.Where(element => !taggedIds.Contains(element.ElementId)).ToList();
+        var created = new List<object>();
+        var failures = new List<string>();
+
+        foreach (var target in targets)
+        {
+            try
+            {
+                var tagId = tagService.CreateTag(
+                    document,
+                    target.ElementId,
+                    WriteArgs.OptionalInt(context, "tagTypeId", "tag_type_id"),
+                    viewId,
+                    target.X ?? 0,
+                    target.Y ?? 0,
+                    null,
+                    WriteArgs.Flag(context, false, "addLeader", "add_leader"));
+                created.Add(new { tagId, target.ElementId, target.CategoryName });
+            }
+            catch (Exception ex)
+            {
+                failures.Add($"{target.ElementId}: {ex.GetBaseException().Message}");
+            }
+        }
+
+        return AIToolResult.Ok(
+            $"批量标记完成：成功 {created.Count}/{candidates.Count}，跳过已标记 {candidates.Count - targets.Count}，失败 {failures.Count}",
+            new
+            {
+                mode = "batch",
+                viewId,
+                categories = categoryNames,
+                includeTagged,
+                candidateCount = candidates.Count,
+                createdCount = created.Count,
+                skippedCount = candidates.Count - targets.Count,
+                failedCount = failures.Count,
+                created,
+                failures = failures.Count == 0 ? null : failures,
+            });
+    }
 }
 
 // 结构分析对照：Revit\AS\Tools\Revit\Net8\AI\Tools\CreateScheduleTool.cs（视图查询）
@@ -173,17 +313,51 @@ internal sealed class CreateScheduleImplementation : IToolImplementation
 
         var fields = ToolArgumentReader.ReadStrings(
             new Dictionary<string, object?>(context.Parameters, StringComparer.OrdinalIgnoreCase), "fields");
-
-        if (fields.Count == 0 && context.Parameters.ContainsKey("fieldUniqueIds"))
+        var fieldParameterIds = ExportArgs.ReadParameterIds(context, "fieldUniqueIds", "field_unique_ids");
+        if (fields.Count == 0 &&
+            (context.Parameters.ContainsKey("fieldUniqueIds") || context.Parameters.ContainsKey("field_unique_ids")) &&
+            fieldParameterIds.Count == 0)
         {
             return Task.FromResult(AIToolResult.Fail(
-                "本实现用字段名创建明细表字段；请改用 fields:[...]（fieldUniqueIds 需要额外的参数唯一 ID 解析，暂未支持）。"));
+                "fieldUniqueIds 必须是 get_schedule_fields 返回的数字 parameterId/uniqueId 字符串"));
         }
 
-        var scheduleId = service.CreateSchedule(document, category, name, fields);
+        var sortBy = ExportArgs.ParseParameterId(WriteArgs.Text(context, "sortByUniqueId", "sort_by_unique_id"));
+        var filterField = ExportArgs.ParseParameterId(WriteArgs.Text(context, "filterFieldUniqueId", "filter_field_unique_id"));
+        var groupBy = ExportArgs.ParseParameterId(WriteArgs.Text(context, "groupByUniqueId", "group_by_unique_id"));
+        var sortOrder = WriteArgs.Text(context, "sortOrder", "sort_order") ?? "ascending";
+        var filterType = WriteArgs.Text(context, "filterType", "filter_type") ?? "contains";
+        var filterValue = WriteArgs.Text(context, "filterValue", "filter_value");
+
+        var scheduleId = service.CreateSchedule(
+            document,
+            category,
+            name,
+            fields,
+            fieldParameterIds,
+            sortBy,
+            sortOrder,
+            filterField,
+            filterType,
+            filterValue,
+            groupBy);
         return Task.FromResult(AIToolResult.Ok(
             $"✅ 已创建明细表 {scheduleId}" + (fields.Count > 0 ? $"（{fields.Count} 个字段）" : string.Empty),
-            new { scheduleId, category, name, fields, fieldCount = fields.Count }));
+            new
+            {
+                scheduleId,
+                category,
+                name,
+                fields,
+                fieldParameterIds,
+                fieldCount = fields.Count + fieldParameterIds.Count,
+                sortByUniqueId = sortBy?.ToString(),
+                sortOrder,
+                filterFieldUniqueId = filterField?.ToString(),
+                filterType,
+                filterValue,
+                groupByUniqueId = groupBy?.ToString(),
+            }));
     }
 }
 
@@ -204,11 +378,22 @@ internal sealed class ExportViewImagesImplementation : IToolImplementation
         var viewIds = ExportArgs.ResolveViewIds(context);
         var directory = WriteArgs.Text(context, "exportDirectory", "export_directory", "directory");
         var pixelSize = (int)WriteArgs.Number(context, 2048, "width", "pixelSize");
+        var quality = WriteArgs.Text(context, "quality");
+        var fileNamePattern = WriteArgs.Text(context, "fileNamePattern", "file_name_pattern");
 
-        var result = service.ExportViewImages(document, viewIds, directory, pixelSize);
+        var result = service.ExportViewImages(document, viewIds, directory, pixelSize, quality, fileNamePattern);
         return Task.FromResult(AIToolResult.Ok(
             $"✅ 已导出 {result.ItemCount} 张视图图片 → {result.OutputPath}",
-            new { outputPath = result.OutputPath, count = result.ItemCount, width = pixelSize, imageFormat = WriteArgs.Text(context, "imageFormat") ?? "png" }));
+            new
+            {
+                outputPath = result.OutputPath,
+                count = result.ItemCount,
+                viewIds,
+                width = pixelSize,
+                quality,
+                fileNamePattern,
+                imageFormat = WriteArgs.Text(context, "imageFormat") ?? "png",
+            }));
     }
 }
 
@@ -229,16 +414,21 @@ internal sealed class ExportViewsAsDwgImplementation : IToolImplementation
         var viewIds = ExportArgs.ResolveViewIds(context);
         var directory = WriteArgs.Text(context, "exportDirectory", "export_directory", "directory");
         var settingName = WriteArgs.Text(context, "exportSettingName", "export_setting_name");
+        var exportAs3D = WriteArgs.Flag(context, false, "exportAs3D", "export_as_3d");
+        var sharedLevels = WriteArgs.Flag(context, false, "sharedLevels", "shared_levels");
 
-        var result = service.ExportViewsAsDwg(document, viewIds, directory, settingName);
+        var result = service.ExportViewsAsDwg(document, viewIds, directory, settingName, exportAs3D, sharedLevels);
         return Task.FromResult(AIToolResult.Ok(
             $"✅ 已导出 {result.ItemCount} 个视图为 DWG → {result.OutputPath}",
             new
             {
                 outputPath = result.OutputPath,
                 count = result.ItemCount,
+                viewIds,
                 exportSettingName = settingName ?? "ACAD2018",
                 exportAsDxf = WriteArgs.Flag(context, false, "exportAsDXF", "export_as_dxf"),
+                exportAs3D,
+                sharedLevels,
             }));
     }
 }

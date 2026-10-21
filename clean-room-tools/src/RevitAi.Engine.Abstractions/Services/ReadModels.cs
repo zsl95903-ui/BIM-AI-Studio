@@ -12,13 +12,21 @@ public sealed record ViewInfo(int Id, string Name, string ViewType, bool IsTempl
 
 public sealed record CategoryInfo(string Name, int Id, string CategoryType);
 
-public sealed record WorksetInfo(int Id, string Name, bool IsOpen, bool IsEditable, string Kind);
+public sealed record WorksetInfo(int Id, string Name, bool IsOpen, bool IsEditable, string Kind, bool IsActive = false);
 
 public sealed record FamilyInfo(int FamilyId, string FamilyName, string Category, int TypeCount);
 
 public sealed record FamilyTypeInfo(int TypeId, string FamilyName, string TypeName, string Category);
 
-public sealed record RoomInfo(int RoomId, string Number, string Name, double AreaSquareMeters, int LevelId, string LevelName);
+public sealed record RoomInfo(
+    int RoomId,
+    string Number,
+    string Name,
+    double AreaSquareMeters,
+    int LevelId,
+    string LevelName,
+    double? VolumeCubicMeters = null,
+    double? PerimeterMeters = null);
 
 public sealed record TagInfo(int TagId, string Text, int? TaggedElementId, string Category);
 

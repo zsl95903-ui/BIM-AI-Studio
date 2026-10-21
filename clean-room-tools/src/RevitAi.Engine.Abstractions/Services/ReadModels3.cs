@@ -26,7 +26,8 @@ public sealed record RoofInfo(
     string LevelName,
     double AreaSquareMeters,
     bool IsFootprintRoof,
-    bool IsExtrusionRoof);
+    bool IsExtrusionRoof,
+    int EdgeCount = 0);
 
 public sealed record FilterParameterInfo(int ParameterId, string Name);
 

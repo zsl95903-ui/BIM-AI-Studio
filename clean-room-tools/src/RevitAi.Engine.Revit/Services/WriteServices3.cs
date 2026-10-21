@@ -24,7 +24,13 @@ internal sealed class DimensionCreationService : IDimensionCreationService
         double xMm,
         double yMm,
         int? spotDimensionTypeId,
-        bool hasLeader)
+        bool hasLeader,
+        double? bendXmm = null,
+        double? bendYmm = null,
+        double? bendZmm = null,
+        double? endXmm = null,
+        double? endYmm = null,
+        double? endZmm = null)
     {
         if (document is not Document doc)
         {
@@ -41,8 +47,14 @@ internal sealed class DimensionCreationService : IDimensionCreationService
 
         var reference = ResolveReference(element);
         var origin = new XYZ(xMm / MillimetersPerFoot, yMm / MillimetersPerFoot, 0);
-        var bend = new XYZ(origin.X, origin.Y + 0.5, origin.Z);
-        var end = new XYZ(origin.X + 0.5, origin.Y, origin.Z);
+        var bend = new XYZ(
+            bendXmm is null ? origin.X : ViewWriteService.MmToFeet(bendXmm.Value),
+            bendYmm is null ? origin.Y + 0.5 : ViewWriteService.MmToFeet(bendYmm.Value),
+            bendZmm is null ? origin.Z : ViewWriteService.MmToFeet(bendZmm.Value));
+        var end = new XYZ(
+            endXmm is null ? origin.X + 0.5 : ViewWriteService.MmToFeet(endXmm.Value),
+            endYmm is null ? origin.Y : ViewWriteService.MmToFeet(endYmm.Value),
+            endZmm is null ? origin.Z : ViewWriteService.MmToFeet(endZmm.Value));
 
         var normalized = (kind ?? "elevation").Trim().ToLowerInvariant();
         var candidates = normalized switch
@@ -213,7 +225,11 @@ internal sealed class ScheduleEditService : IScheduleEditService
         bool replaceFields,
         int? sortByParameterId,
         string? sortOrder,
-        int? groupByParameterId)
+        int? groupByParameterId,
+        int? filterFieldParameterId = null,
+        string? filterType = null,
+        string? filterValue = null,
+        bool showGroupHeader = true)
     {
         if (document is not Document doc)
         {
@@ -281,9 +297,48 @@ internal sealed class ScheduleEditService : IScheduleEditService
             }
         }
 
-        // 说明：排序/分组（sortByParameterId / groupByParameterId）本期只记录不落地，
-        // Revit 侧需要通过 ScheduleSortGroupField 构造 + Definition.SetSortGroupField 组合设置，
-        // 需要更多实测确认；addFieldParameterIds / removeFieldParameterIds / replaceFields 已实现。
+        if (sortByParameterId is not null || groupByParameterId is not null)
+        {
+            var sortFields = new List<ScheduleSortGroupField>();
+            if (sortByParameterId is not null &&
+                FindFieldIdByParameter(definition, sortByParameterId.Value) is { } sortFieldId)
+            {
+                sortFields.Add(new ScheduleSortGroupField(
+                    sortFieldId,
+                    string.Equals(sortOrder, "descending", StringComparison.OrdinalIgnoreCase)
+                        ? ScheduleSortOrder.Descending
+                        : ScheduleSortOrder.Ascending));
+            }
+
+            if (groupByParameterId is not null &&
+                FindFieldIdByParameter(definition, groupByParameterId.Value) is { } groupFieldId)
+            {
+                var groupField = sortFields.FirstOrDefault(field => field.FieldId == groupFieldId);
+                if (groupField is null)
+                {
+                    groupField = new ScheduleSortGroupField(groupFieldId);
+                    sortFields.Add(groupField);
+                }
+
+                groupField.ShowHeader = showGroupHeader;
+            }
+
+            definition.SetSortGroupFields(sortFields);
+        }
+
+        if (filterFieldParameterId is not null &&
+            FindFieldIdByParameter(definition, filterFieldParameterId.Value) is { } filterFieldId)
+        {
+            for (var index = definition.GetFilterCount() - 1; index >= 0; index--)
+            {
+                definition.RemoveFilter(index);
+            }
+
+            definition.AddFilter(new ScheduleFilter(
+                filterFieldId,
+                ScheduleService.ParseFilterType(filterType),
+                filterValue ?? string.Empty));
+        }
 
         return (int)schedule.Id.Value;
     }

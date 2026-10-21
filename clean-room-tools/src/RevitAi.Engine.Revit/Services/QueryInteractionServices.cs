@@ -1,5 +1,6 @@
 using Autodesk.Revit.DB;
 using Autodesk.Revit.DB.Architecture;
+using Autodesk.Revit.UI;
 using RevitAi.Engine.Abstractions.Services;
 
 namespace RevitAi.Engine.Revit.Services;
@@ -162,6 +163,29 @@ internal sealed class AdvancedQueryService : IAdvancedQueryService
         var typeElement = typeId is not null && typeId != ElementId.InvalidElementId ? doc.GetElement(typeId) : null;
         var levelElement = element.LevelId is { } levelId && levelId != ElementId.InvalidElementId ? doc.GetElement(levelId) : null;
 
+        double? x = null;
+        double? y = null;
+        double? z = null;
+        try
+        {
+            var point = element.Location switch
+            {
+                LocationPoint locationPoint => locationPoint.Point,
+                LocationCurve { Curve: { } curve } => curve.Evaluate(0.5, true),
+                _ => null,
+            };
+            if (point is not null)
+            {
+                x = Math.Round(point.X * 304.8, 3);
+                y = Math.Round(point.Y * 304.8, 3);
+                z = Math.Round(point.Z * 304.8, 3);
+            }
+        }
+        catch (Exception)
+        {
+            // 部分元素没有可用定位点。
+        }
+
         return new ElementSummary(
             (int)element.Id.Value,
             element.Name ?? string.Empty,
@@ -169,7 +193,11 @@ internal sealed class AdvancedQueryService : IAdvancedQueryService
             typeId is null ? -1 : (int)typeId.Value,
             typeElement?.Name ?? string.Empty,
             element.LevelId is null ? -1 : (int)element.LevelId.Value,
-            levelElement?.Name ?? string.Empty);
+            levelElement?.Name ?? string.Empty,
+            x,
+            y,
+            z,
+            element is ElementType);
     }
 
     public IReadOnlyList<BoundaryLoopInfo> GetRoomBoundaries(object document, int roomId)
@@ -272,7 +300,15 @@ internal sealed class AdvancedQueryService : IAdvancedQueryService
                 heading = string.Empty;
             }
 
-            result.Add(new ScheduleFieldInfo(index, field.GetName(), field.FieldType.ToString(), field.IsHidden, heading));
+            var parameterId = field.ParameterId.Value;
+            result.Add(new ScheduleFieldInfo(
+                index,
+                field.GetName(),
+                field.FieldType.ToString(),
+                field.IsHidden,
+                heading,
+                (int)parameterId,
+                parameterId.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         }
 
         return result;
@@ -319,49 +355,191 @@ internal sealed class AdvancedQueryService : IAdvancedQueryService
         return new ScheduleDataInfo(schedule.Name, headers, rows, body.NumberOfRows, rows.Count);
     }
 
-    public IReadOnlyList<CollisionPairInfo> CheckCollision(object document, IReadOnlyList<int> sourceIds, IReadOnlyList<int> targetIds)
+    public IReadOnlyList<CollisionPairInfo> CheckCollision(
+        object document,
+        IReadOnlyList<int> sourceIds,
+        IReadOnlyList<int> targetIds,
+        int? sourceLinkInstanceId = null,
+        int? targetLinkInstanceId = null)
     {
-        var doc = ModelingService.RequireDocument(document);
+        var hostDocument = ModelingService.RequireDocument(document);
+        var sourceDocument = ResolveLinkDocument(hostDocument, sourceLinkInstanceId);
+        var targetDocument = ResolveLinkDocument(hostDocument, targetLinkInstanceId);
+        var sourceTransform = ResolveLinkTransform(hostDocument, sourceLinkInstanceId);
+        var targetTransform = ResolveLinkTransform(hostDocument, targetLinkInstanceId);
+
+        var sources = sourceIds
+            .Select(id => sourceDocument.GetElement(new ElementId(id)))
+            .Where(element => element is not null)
+            .Select(element => element!)
+            .Take(200)
+            .ToList();
+        var targets = targetIds
+            .Select(id => targetDocument.GetElement(new ElementId(id)))
+            .Where(element => element is not null)
+            .Select(element => element!)
+            .Take(500)
+            .ToList();
+
         var result = new List<CollisionPairInfo>();
-
-        var sources = sourceIds.Count > 0
-            ? sourceIds.Select(id => doc.GetElement(new ElementId(id))).Where(element => element is not null).Select(element => element!).ToList()
-            : new FilteredElementCollector(doc).WhereElementIsNotElementType().Take(50).ToList();
-
-        var targets = targetIds.Count > 0
-            ? targetIds.Select(id => doc.GetElement(new ElementId(id))).Where(element => element is not null).Select(element => element!).ToList()
-            : new FilteredElementCollector(doc).WhereElementIsNotElementType().Take(200).ToList();
-
-        var targetIdSet = targets.Select(element => (int)element.Id.Value).ToHashSet();
-
-        foreach (var source in sources.Take(50))
+        foreach (var source in sources)
         {
-            try
+            foreach (var target in targets)
             {
-                var filter = new ElementIntersectsElementFilter(source);
-                var hits = new FilteredElementCollector(doc)
-                    .WherePasses(filter)
-                    .WhereElementIsNotElementType()
-                    .Select(element => (int)element.Id.Value)
-                    .Where(id => targetIdSet.Contains(id))
-                    .ToList();
+                if (sourceDocument == targetDocument && source.Id == target.Id)
+                {
+                    continue;
+                }
 
-                if (hits.Count == 0)
+                try
                 {
-                    result.Add(new CollisionPairInfo((int)source.Id.Value, -1, false));
+                    var intersects = sourceDocument == targetDocument
+                        ? SameDocumentIntersects(sourceDocument, source, target)
+                        : SolidsIntersect(source, target, sourceTransform, targetTransform);
+
+                    if (intersects)
+                    {
+                        result.Add(new CollisionPairInfo(
+                            (int)source.Id.Value,
+                            (int)target.Id.Value,
+                            true,
+                            sourceDocument == hostDocument ? 0 : 1,
+                            targetDocument == hostDocument ? 0 : 1,
+                            sourceLinkInstanceId,
+                            targetLinkInstanceId,
+                            source.Category?.Name ?? string.Empty,
+                            target.Category?.Name ?? string.Empty,
+                            GetTypeName(source),
+                            GetTypeName(target),
+                            Array.Empty<Point3>()));
+                    }
                 }
-                else
+                catch (Exception)
                 {
-                    result.AddRange(hits.Select(hit => new CollisionPairInfo((int)source.Id.Value, hit, true)));
+                    // 不支持几何相交的元素跳过，保持批量检查可继续。
                 }
-            }
-            catch (Exception)
-            {
-                // 不支持相交过滤的元素跳过。
             }
         }
 
+        return result
+            .GroupBy(pair => (pair.SourceId, pair.TargetId, pair.SourceDocumentIndex, pair.TargetDocumentIndex))
+            .Select(group => group.First())
+            .ToList();
+    }
+
+    private static Document ResolveLinkDocument(Document hostDocument, int? linkInstanceId)
+    {
+        if (linkInstanceId is null)
+        {
+            return hostDocument;
+        }
+
+        var instance = hostDocument.GetElement(new ElementId(linkInstanceId.Value)) as RevitLinkInstance
+                       ?? throw new InvalidOperationException($"未找到链接实例 {linkInstanceId}。");
+        return instance.GetLinkDocument()
+               ?? throw new InvalidOperationException($"链接实例 {linkInstanceId} 的文档未加载。");
+    }
+
+    private static Transform? ResolveLinkTransform(Document hostDocument, int? linkInstanceId)
+    {
+        if (linkInstanceId is null)
+        {
+            return null;
+        }
+
+        return (hostDocument.GetElement(new ElementId(linkInstanceId.Value)) as RevitLinkInstance)?.GetTotalTransform();
+    }
+
+    private static bool SameDocumentIntersects(Document document, Element source, Element target)
+    {
+        var filter = new ElementIntersectsElementFilter(source);
+        return new FilteredElementCollector(document)
+            .WherePasses(filter)
+            .WhereElementIsNotElementType()
+            .Any(element => element.Id == target.Id);
+    }
+
+    private static bool SolidsIntersect(Element source, Element target, Transform? sourceTransform, Transform? targetTransform)
+    {
+        var sourceSolids = GetSolids(source, sourceTransform);
+        var targetSolids = GetSolids(target, targetTransform);
+        foreach (var sourceSolid in sourceSolids)
+        {
+            foreach (var targetSolid in targetSolids)
+            {
+                try
+                {
+                    var intersection = BooleanOperationsUtils.ExecuteBooleanOperation(
+                        sourceSolid,
+                        targetSolid,
+                        BooleanOperationsType.Intersect);
+                    if (intersection is not null && intersection.Volume > 1e-9)
+                    {
+                        return true;
+                    }
+                }
+                catch (Exception)
+                {
+                    // 退化几何或布尔运算失败时继续检查其他组合。
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static IReadOnlyList<Solid> GetSolids(Element element, Transform? transform)
+    {
+        var result = new List<Solid>();
+        var geometry = element.get_Geometry(new Options
+        {
+            DetailLevel = ViewDetailLevel.Fine,
+            ComputeReferences = false,
+            IncludeNonVisibleObjects = false,
+        });
+        if (geometry is null)
+        {
+            return result;
+        }
+
+        if (transform is not null)
+        {
+            geometry = geometry.GetTransformed(transform);
+        }
+
+        CollectSolids(geometry, result);
         return result;
+    }
+
+    private static void CollectSolids(GeometryElement geometry, ICollection<Solid> target)
+    {
+        foreach (var item in geometry)
+        {
+            switch (item)
+            {
+                case Solid solid when solid.Volume > 1e-9:
+                    target.Add(solid);
+                    break;
+                case GeometryInstance instance:
+                    CollectSolids(instance.GetInstanceGeometry(), target);
+                    break;
+            }
+        }
+    }
+
+    private static string GetTypeName(Element element)
+    {
+        try
+        {
+            var typeId = element.GetTypeId();
+            return typeId is null || typeId == ElementId.InvalidElementId
+                ? string.Empty
+                : element.Document.GetElement(typeId)?.Name ?? string.Empty;
+        }
+        catch (Exception)
+        {
+            return string.Empty;
+        }
     }
 
     public bool DeleteLink(object document, int linkId)
@@ -404,6 +582,19 @@ internal sealed class AdvancedQueryService : IAdvancedQueryService
         {
             return string.Empty;
         }
+    }
+}
+
+internal sealed class SelectionQueryService : ISelectionQueryService
+{
+    public IReadOnlyList<int> GetSelectedElementIds(object uiDocument)
+    {
+        if (uiDocument is not UIDocument document)
+        {
+            throw new InvalidOperationException("当前对象不是 UIDocument。");
+        }
+
+        return document.Selection.GetElementIds().Select(id => (int)id.Value).ToList();
     }
 }
 

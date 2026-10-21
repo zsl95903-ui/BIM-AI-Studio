@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.0.0 - 2026-10-21 - Clean-room 120 tools
+
+- Replaced the legacy decompiled `rebuilt-120-tools/` source set with the Apache-2.0 `clean-room-tools/` implementation.
+- Removed more than 200,000 physical lines of decompiler-generated and duplicated code from the repository tree.
+- Added generated tool classes for all 120 contract tools plus the self-authored `upsert_level` extension.
+- Added complete MEP, CAD, material, parameter, annotation, schedule, export, selection and geometry service coverage.
+- Added 352 smoke assertions, including 117 directly exercised tools and Revit-host self-tests for the remaining contract tools.
+- Added a reproducible build, test and unified package pipeline in `clean-room-tools/package.ps1`.
+- Added the MIT-licensed `ACadSharp` 3.4.9 dependency for DWG/DXF parsing.
+- Legacy decompiled source, original assemblies and de-obfuscation intermediates are no longer distributed.
+
 ## 1.0.0 - 2026-10-17 - BIM-AI Studio
 
 - 项目更名为 **BIM-AI Studio**（BIM+AI 智能建筑协同创新套件）。
@@ -20,7 +31,7 @@
 - Codex bridge now starts automatically with the Revit AI UI and writes `%LOCALAPPDATA%\RevitAi\codex-bridge.json`.
 - This release is a test build, not a formal production release.
 
-> 该测试包的安装文件已从源码树移出，改由 Releases 提供；`rebuilt-120-tools/` 源码保留。
+> 该测试包的安装文件已从源码树移出，改由 Releases 提供。旧 `rebuilt-120-tools/` 源码已在 2.0.0 中完全移除。
 
 ## 2.1.0 - 2026-09-20
 

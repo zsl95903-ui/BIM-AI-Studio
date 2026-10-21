@@ -57,6 +57,7 @@ public sealed class RevitAdapter : IRevitAdapter
         ShapeModelingService = new ShapeModelingService();
         ElementOpsService = new ElementOpsService();
         AdvancedQueryService = new AdvancedQueryService();
+        SelectionQueryService = new SelectionQueryService();
         ProjectSettingsService = new ProjectSettingsService();
         TopographyService = new TopographyService();
         InsulationService = new InsulationService();
@@ -149,6 +150,8 @@ public sealed class RevitAdapter : IRevitAdapter
     public IElementOpsService ElementOpsService { get; }
 
     public IAdvancedQueryService AdvancedQueryService { get; }
+
+    public ISelectionQueryService SelectionQueryService { get; }
 
     public IProjectSettingsService ProjectSettingsService { get; }
 

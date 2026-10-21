@@ -19,7 +19,18 @@ public interface ITagCreationService
 
 public interface IScheduleService
 {
-    int CreateSchedule(object document, string categoryName, string? name, IReadOnlyList<string> fields);
+    int CreateSchedule(
+        object document,
+        string categoryName,
+        string? name,
+        IReadOnlyList<string> fields,
+        IReadOnlyList<int>? fieldParameterIds = null,
+        int? sortByParameterId = null,
+        string? sortOrder = null,
+        int? filterFieldParameterId = null,
+        string? filterType = null,
+        string? filterValue = null,
+        int? groupByParameterId = null);
 
     /// <summary>导出明细表为 CSV（不依赖第三方库）；scheduleId 与 scheduleName 至少给一个。</summary>
     ExportResult ExportScheduleToCsv(object document, int? scheduleId, string? scheduleName, string? outputPath);
@@ -27,7 +38,19 @@ public interface IScheduleService
 
 public interface IExportService
 {
-    ExportResult ExportViewImages(object document, IReadOnlyList<int> viewIds, string? outputDirectory, int pixelSize);
+    ExportResult ExportViewImages(
+        object document,
+        IReadOnlyList<int> viewIds,
+        string? outputDirectory,
+        int pixelSize,
+        string? quality = null,
+        string? fileNamePattern = null);
 
-    ExportResult ExportViewsAsDwg(object document, IReadOnlyList<int> viewIds, string? outputDirectory, string? exportSettingName);
+    ExportResult ExportViewsAsDwg(
+        object document,
+        IReadOnlyList<int> viewIds,
+        string? outputDirectory,
+        string? exportSettingName,
+        bool exportAs3D = false,
+        bool sharedLevels = false);
 }

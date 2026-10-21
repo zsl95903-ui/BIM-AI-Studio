@@ -363,6 +363,14 @@ internal sealed class CreateSheetImplementation : IToolImplementation
         var sheetName = WriteArgs.Text(context, "title", "sheetName", "name");
         var sheetNumber = WriteArgs.Text(context, "number", "sheetNumber");
         var viewId = service.CreateSheet(document, sheetNumber, sheetName);
+        var addViewId = WriteArgs.OptionalInt(context, "add_view", "addView");
+        int? viewportId = null;
+        if (addViewId is not null)
+        {
+            var positionX = WriteArgs.Number(context, 0, "view_position_x", "viewPositionX");
+            var positionY = WriteArgs.Number(context, 0, "view_position_y", "viewPositionY");
+            viewportId = service.PlaceViewOnSheet(document, viewId, addViewId.Value, positionX, positionY);
+        }
 
         return Task.FromResult(AIToolResult.Ok(
             $"✅ 已创建图纸 {viewId}" + (string.IsNullOrWhiteSpace(sheetNumber) ? string.Empty : $"（图号 {sheetNumber}）"),
@@ -371,8 +379,14 @@ internal sealed class CreateSheetImplementation : IToolImplementation
                 sheetId = viewId,
                 sheetNumber,
                 sheetName,
-                addView = WriteArgs.Text(context, "add_view", "addView"),
-                note = "add_view/view_position 暂未实现（放置视图port需要 Viewport.Create）。",
+                addView = addViewId,
+                viewportId,
+                viewPosition = addViewId is null ? null : new
+                {
+                    x = WriteArgs.Number(context, 0, "view_position_x", "viewPositionX"),
+                    y = WriteArgs.Number(context, 0, "view_position_y", "viewPositionY"),
+                    unit = "millimeters",
+                },
             }));
     }
 }
@@ -389,10 +403,19 @@ internal sealed class CreateTextNoteImplementation : IToolImplementation
                    ?? throw new InvalidOperationException("必须提供 text（文字内容）。");
         var position = WriteArgs.Point(context, (0, 0, 0), "position", "location");
 
-        var noteId = service.CreateTextNote(document, text, position.X, position.Y, WriteArgs.OptionalInt(context, "viewId", "view_id"));
+        var textTypeId = WriteArgs.OptionalInt(context, "textTypeId", "text_type_id");
+        var leader = WriteArgs.Flag(context, false, "leader");
+        var noteId = service.CreateTextNote(
+            document,
+            text,
+            position.X,
+            position.Y,
+            WriteArgs.OptionalInt(context, "viewId", "view_id"),
+            textTypeId,
+            leader);
         return Task.FromResult(AIToolResult.Ok(
             $"✅ 已创建文字注释 {noteId}",
-            new { noteId, text, position = new { x = position.X, y = position.Y, unit = "millimeters" } }));
+            new { noteId, text, textTypeId, leader, position = new { x = position.X, y = position.Y, unit = "millimeters" } }));
     }
 }
 
@@ -409,13 +432,14 @@ internal sealed class SetViewFilterImplementation : IToolImplementation
         var action = WriteArgs.Text(context, "action") ?? "apply";
         var visible = WriteArgs.Flag(context, true, "visible");
         var (red, green, blue) = WriteArgs.Color(context, (255, 0, 0), "color", "patternColor");
+        var patternId = WriteArgs.OptionalInt(context, "patternId", "pattern_id");
 
         var filterId = service.ApplyFilterToView(
-            document, WriteArgs.OptionalInt(context, "viewId", "view_id"), filterName, action, red, green, blue, visible);
+            document, WriteArgs.OptionalInt(context, "viewId", "view_id"), filterName, action, red, green, blue, visible, patternId);
 
         return Task.FromResult(AIToolResult.Ok(
             $"✅ 过滤器 {filterName} 已执行 {action}（视图 {WriteArgs.OptionalInt(context, "viewId", "view_id")?.ToString() ?? "当前"}）",
-            new { filterId, filterName, action, visible, color = new { red, green, blue } }));
+            new { filterId, filterName, action, visible, patternId, color = new { red, green, blue } }));
     }
 }
 

@@ -16,7 +16,13 @@ public interface IDimensionCreationService
         double xMm,
         double yMm,
         int? spotDimensionTypeId,
-        bool hasLeader);
+        bool hasLeader,
+        double? bendXmm = null,
+        double? bendYmm = null,
+        double? bendZmm = null,
+        double? endXmm = null,
+        double? endYmm = null,
+        double? endZmm = null);
 }
 
 public interface IScheduleEditService
@@ -31,5 +37,9 @@ public interface IScheduleEditService
         bool replaceFields,
         int? sortByParameterId,
         string? sortOrder,
-        int? groupByParameterId);
+        int? groupByParameterId,
+        int? filterFieldParameterId = null,
+        string? filterType = null,
+        string? filterValue = null,
+        bool showGroupHeader = true);
 }

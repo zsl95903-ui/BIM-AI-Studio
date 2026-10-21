@@ -12,7 +12,73 @@ public sealed record RoadResult(
     IReadOnlyList<Point2> Outline,
     IReadOnlyList<string> Notes);
 
-public sealed record CadLayerInfo(string Name, int CategoryId, bool Visible);
+public sealed record CadLayerInfo(
+    string Name,
+    int? CategoryId,
+    bool Visible,
+    int? ColorIndex = null,
+    bool IsLocked = false,
+    string? LineTypeName = null);
+
+public sealed record CadPoint(double X, double Y, double Z = 0);
+
+public sealed record CadLineInfo(
+    string LayerName,
+    string LineType,
+    double StartX,
+    double StartY,
+    double StartZ,
+    double EndX,
+    double EndY,
+    double EndZ,
+    string? BlockName = null);
+
+public sealed record CadTextInfo(
+    string LayerName,
+    string Content,
+    double X,
+    double Y,
+    double Z,
+    double Height = 0,
+    double Width = 0,
+    double Rotation = 0,
+    string? BlockName = null);
+
+public sealed record CadBlockInfo(
+    string LayerName,
+    string Name,
+    double X,
+    double Y,
+    double Z,
+    double ScaleX = 1,
+    double ScaleY = 1,
+    double ScaleZ = 1,
+    double Rotation = 0);
+
+public sealed record CadAnalysisLayerInfo(
+    string LayerName,
+    int BlockCount,
+    int LineCount,
+    int TextCount,
+    int TotalCount,
+    bool IsEmpty,
+    int? ColorIndex,
+    bool IsVisible,
+    bool IsLocked,
+    IReadOnlyList<string> ContentSummary);
+
+public sealed record CadQueryResult(
+    string Operation,
+    int LinkId,
+    string Source,
+    int LayerCount,
+    int NonEmptyLayerCount,
+    IReadOnlyList<CadLayerInfo> Layers,
+    IReadOnlyList<CadLineInfo> Lines,
+    IReadOnlyList<CadTextInfo> Texts,
+    IReadOnlyList<CadBlockInfo> Blocks,
+    IReadOnlyList<CadAnalysisLayerInfo> Analysis,
+    string? Message);
 
 public sealed record CutOrderResult(int Checked, int Fixed, bool DryRun, IReadOnlyList<string> Details);
 
@@ -27,7 +93,7 @@ public interface IDomainExtraService
         double? sidewalkWidthMeters,
         double? defaultRoadWidthMeters);
 
-    IReadOnlyList<CadLayerInfo> ManageCadLayers(object document, int viewId, int linkId, string operation, string? layerName);
+    CadQueryResult QueryCad(object document, int linkId, string operation, string? layerName);
 
     CutOrderResult FixCuttingOrder(
         object document,

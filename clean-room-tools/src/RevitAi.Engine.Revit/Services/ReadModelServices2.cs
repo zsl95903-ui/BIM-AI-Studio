@@ -72,6 +72,7 @@ internal sealed class FamilyQueryService : IFamilyQueryService
 internal sealed class RoomService : IRoomService
 {
     private const double SquareFeetToSquareMeters = 0.09290304;
+    private const double CubicFeetToCubicMeters = 0.028316846592;
 
     public IReadOnlyList<RoomInfo> GetAllRooms(object document)
     {
@@ -84,13 +85,32 @@ internal sealed class RoomService : IRoomService
             .OfCategory(BuiltInCategory.OST_Rooms)
             .WhereElementIsNotElementType()
             .Cast<Room>()
-            .Select(room => new RoomInfo(
-                (int)room.Id.Value,
-                room.Number ?? string.Empty,
-                room.Name ?? string.Empty,
-                Math.Round(room.Area * SquareFeetToSquareMeters, 3),
-                room.Level is null ? 0 : (int)room.Level.Id.Value,
-                room.Level?.Name ?? string.Empty))
+            .Select(room =>
+            {
+                double perimeter = 0;
+                try
+                {
+                    var loops = room.GetBoundarySegments(new SpatialElementBoundaryOptions());
+                    if (loops is not null)
+                    {
+                        perimeter = loops.SelectMany(loop => loop).Sum(segment => segment.GetCurve().Length);
+                    }
+                }
+                catch (Exception)
+                {
+                    // 未闭合房间可能没有边界。
+                }
+
+                return new RoomInfo(
+                    (int)room.Id.Value,
+                    room.Number ?? string.Empty,
+                    room.Name ?? string.Empty,
+                    Math.Round(room.Area * SquareFeetToSquareMeters, 3),
+                    room.Level is null ? 0 : (int)room.Level.Id.Value,
+                    room.Level?.Name ?? string.Empty,
+                    Math.Round(room.Volume * CubicFeetToCubicMeters, 3),
+                    Math.Round(perimeter * 0.3048, 3));
+            })
             .ToArray();
     }
 }
@@ -145,6 +165,7 @@ internal sealed class TagService : ITagService
 internal sealed class ElementQueryService : IElementQueryService
 {
     private const double MillimetersPerFoot = 304.8;
+    private const double SquareFeetToSquareMeters = 0.09290304;
 
     public IReadOnlyList<ElementSummaryInfo> GetAllElements(object document, string? categoryName, int limit)
     {
@@ -173,7 +194,7 @@ internal sealed class ElementQueryService : IElementQueryService
             .ToArray();
     }
 
-    public ElementGeometryInfo? GetElementGeometry(object document, int elementId)
+    public ElementGeometryInfo? GetElementGeometry(object document, int elementId, bool computeReferences = false)
     {
         if (document is not Document doc)
         {
@@ -221,7 +242,7 @@ internal sealed class ElementQueryService : IElementQueryService
             maxZ = box.Max.Z * MillimetersPerFoot;
         }
 
-        var (solids, curves) = CountGeometry(element);
+        var (solids, curves, areaSquareFeet) = CountGeometry(element, computeReferences);
 
         return new ElementGeometryInfo(
             elementId,
@@ -240,32 +261,34 @@ internal sealed class ElementQueryService : IElementQueryService
             Math.Round(maxZ, 2),
             solids,
             curves,
-            "millimeters");
+            "millimeters",
+            Math.Round(areaSquareFeet * SquareFeetToSquareMeters, 3));
     }
 
-    private static (int Solids, int Curves) CountGeometry(Element element)
+    private static (int Solids, int Curves, double AreaSquareFeet) CountGeometry(Element element, bool computeReferences)
     {
         try
         {
             var options = new Options
             {
                 DetailLevel = ViewDetailLevel.Fine,
-                ComputeReferences = false,
+                ComputeReferences = computeReferences,
                 IncludeNonVisibleObjects = false,
             };
 
             var solids = 0;
             var curves = 0;
-            Collect(element.get_Geometry(options), ref solids, ref curves);
-            return (solids, curves);
+            var area = 0d;
+            Collect(element.get_Geometry(options), ref solids, ref curves, ref area);
+            return (solids, curves, area);
         }
         catch (Exception)
         {
-            return (0, 0);
+            return (0, 0, 0);
         }
     }
 
-    private static void Collect(GeometryElement? geometry, ref int solids, ref int curves)
+    private static void Collect(GeometryElement? geometry, ref int solids, ref int curves, ref double areaSquareFeet)
     {
         if (geometry is null)
         {
@@ -278,12 +301,16 @@ internal sealed class ElementQueryService : IElementQueryService
             {
                 case Solid solid when solid.Faces.Size > 0 || solid.Edges.Size > 0:
                     solids++;
+                    foreach (Face face in solid.Faces)
+                    {
+                        areaSquareFeet += face.Area;
+                    }
                     break;
                 case Curve:
                     curves++;
                     break;
                 case GeometryInstance instance:
-                    Collect(instance.GetInstanceGeometry(), ref solids, ref curves);
+                    Collect(instance.GetInstanceGeometry(), ref solids, ref curves, ref areaSquareFeet);
                     break;
             }
         }
@@ -383,7 +410,8 @@ internal sealed class ViewQueryService : IViewQueryService
                     (int)filterId.Value,
                     doc.GetElement(filterId)?.Name ?? string.Empty,
                     true,
-                    view.GetFilterVisibility(filterId)));
+                    view.GetFilterVisibility(filterId),
+                    ReadFilterRules(doc.GetElement(filterId) as ParameterFilterElement)));
             }
             catch (Exception)
             {
@@ -392,6 +420,25 @@ internal sealed class ViewQueryService : IViewQueryService
         }
 
         return result;
+    }
+
+    private static IReadOnlyList<string>? ReadFilterRules(ParameterFilterElement? filter)
+    {
+        if (filter is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return filter.GetElementFilter() is ElementParameterFilter elementFilter
+                ? elementFilter.GetRules().Cast<FilterRule>().Select(rule => rule.ToString()).ToArray()
+                : Array.Empty<string>();
+        }
+        catch (Exception)
+        {
+            return null;
+        }
     }
 
     public CategoryVisibilityInfo? GetCategoryVisibility(object document, int? viewId, string categoryName)

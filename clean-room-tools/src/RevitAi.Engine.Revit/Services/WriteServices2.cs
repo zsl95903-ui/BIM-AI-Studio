@@ -169,7 +169,18 @@ internal sealed class TagCreationService : ITagCreationService
 
 internal sealed class ScheduleService : IScheduleService
 {
-    public int CreateSchedule(object document, string categoryName, string? name, IReadOnlyList<string> fields)
+    public int CreateSchedule(
+        object document,
+        string categoryName,
+        string? name,
+        IReadOnlyList<string> fields,
+        IReadOnlyList<int>? fieldParameterIds = null,
+        int? sortByParameterId = null,
+        string? sortOrder = null,
+        int? filterFieldParameterId = null,
+        string? filterType = null,
+        string? filterValue = null,
+        int? groupByParameterId = null)
     {
         if (document is not Document doc)
         {
@@ -210,6 +221,59 @@ internal sealed class ScheduleService : IScheduleService
             {
                 // 该字段不适用于此类别时跳过。
             }
+        }
+
+        if (fieldParameterIds is not null)
+        {
+            foreach (var parameterId in fieldParameterIds)
+            {
+                try
+                {
+                    schedule.Definition.AddField(ScheduleFieldType.Instance, new ElementId(parameterId));
+                }
+                catch (Exception)
+                {
+                    // 不适用于当前类别的字段跳过。
+                }
+            }
+        }
+
+        var sortFields = new List<ScheduleSortGroupField>();
+        if (sortByParameterId is not null &&
+            FindFieldIdByParameter(schedule.Definition, sortByParameterId.Value) is { } sortFieldId)
+        {
+            sortFields.Add(new ScheduleSortGroupField(
+                sortFieldId,
+                string.Equals(sortOrder, "descending", StringComparison.OrdinalIgnoreCase)
+                    ? ScheduleSortOrder.Descending
+                    : ScheduleSortOrder.Ascending));
+        }
+
+        if (groupByParameterId is not null &&
+            FindFieldIdByParameter(schedule.Definition, groupByParameterId.Value) is { } groupFieldId)
+        {
+            var groupField = sortFields.FirstOrDefault(field => field.FieldId == groupFieldId);
+            if (groupField is null)
+            {
+                groupField = new ScheduleSortGroupField(groupFieldId);
+                sortFields.Add(groupField);
+            }
+
+            groupField.ShowHeader = true;
+        }
+
+        if (sortFields.Count > 0)
+        {
+            schedule.Definition.SetSortGroupFields(sortFields);
+        }
+
+        if (filterFieldParameterId is not null &&
+            FindFieldIdByParameter(schedule.Definition, filterFieldParameterId.Value) is { } filterFieldId)
+        {
+            schedule.Definition.AddFilter(new ScheduleFilter(
+                filterFieldId,
+                ParseFilterType(filterType),
+                filterValue ?? string.Empty));
         }
 
         return (int)schedule.Id.Value;
@@ -307,11 +371,43 @@ internal sealed class ScheduleService : IScheduleService
 
         return null;
     }
+
+    private static ScheduleFieldId? FindFieldIdByParameter(ScheduleDefinition definition, int parameterId)
+    {
+        for (var index = 0; index < definition.GetFieldCount(); index++)
+        {
+            var field = definition.GetField(index);
+            if (field.ParameterId == new ElementId(parameterId))
+            {
+                return field.FieldId;
+            }
+        }
+
+        return null;
+    }
+
+    internal static ScheduleFilterType ParseFilterType(string? filterType)
+        => (filterType ?? "contains").Trim().ToLowerInvariant() switch
+        {
+            "equal" => ScheduleFilterType.Equal,
+            "not_equal" => ScheduleFilterType.NotEqual,
+            "greater_than" => ScheduleFilterType.GreaterThan,
+            "greater_or_equal" => ScheduleFilterType.GreaterThanOrEqual,
+            "less_than" => ScheduleFilterType.LessThan,
+            "less_or_equal" => ScheduleFilterType.LessThanOrEqual,
+            _ => ScheduleFilterType.Contains,
+        };
 }
 
 internal sealed class ExportService : IExportService
 {
-    public ExportResult ExportViewImages(object document, IReadOnlyList<int> viewIds, string? outputDirectory, int pixelSize)
+    public ExportResult ExportViewImages(
+        object document,
+        IReadOnlyList<int> viewIds,
+        string? outputDirectory,
+        int pixelSize,
+        string? quality = null,
+        string? fileNamePattern = null)
     {
         if (document is not Document doc)
         {
@@ -332,7 +428,12 @@ internal sealed class ExportService : IExportService
 
         foreach (var view in views)
         {
-            var path = Path.Combine(directory, ExportPaths.Sanitize(view.Name));
+            var fileName = string.IsNullOrWhiteSpace(fileNamePattern)
+                ? view.Name
+                : fileNamePattern!
+                    .Replace("{view}", view.Name, StringComparison.OrdinalIgnoreCase)
+                    .Replace("{id}", view.Id.Value.ToString(System.Globalization.CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase);
+            var path = Path.Combine(directory, ExportPaths.Sanitize(fileName));
             try
             {
                 var options = new ImageExportOptions
@@ -341,7 +442,12 @@ internal sealed class ExportService : IExportService
                     PixelSize = size,
                     ZoomType = ZoomFitType.FitToPage,
                     HLRandWFViewsFileType = ImageFileType.PNG,
-                    ImageResolution = ImageResolution.DPI_150,
+                    ImageResolution = (quality ?? string.Empty).Trim().ToLowerInvariant() switch
+                    {
+                        "high" or "高" => ImageResolution.DPI_300,
+                        "low" or "低" => ImageResolution.DPI_72,
+                        _ => ImageResolution.DPI_150,
+                    },
                 };
                 options.SetViewsAndSheets(new List<ElementId> { view.Id });
 
@@ -357,7 +463,13 @@ internal sealed class ExportService : IExportService
         return new ExportResult(directory, exported, "images");
     }
 
-    public ExportResult ExportViewsAsDwg(object document, IReadOnlyList<int> viewIds, string? outputDirectory, string? exportSettingName)
+    public ExportResult ExportViewsAsDwg(
+        object document,
+        IReadOnlyList<int> viewIds,
+        string? outputDirectory,
+        string? exportSettingName,
+        bool exportAs3D = false,
+        bool sharedLevels = false)
     {
         if (document is not Document doc)
         {
@@ -375,6 +487,12 @@ internal sealed class ExportService : IExportService
 
         var settingName = string.IsNullOrWhiteSpace(exportSettingName) ? "ACAD2018" : exportSettingName!;
         var options = DWGExportOptions.GetPredefinedOptions(doc, settingName) ?? new DWGExportOptions();
+        options.SharedCoords = sharedLevels;
+        if (exportAs3D && views.All(view => view.ViewType != ViewType.ThreeD))
+        {
+            throw new InvalidOperationException("exportAs3D=true 时，所选视图中至少需要一个三维视图。");
+        }
+
         doc.Export(directory, ExportPaths.Sanitize("ExtToolLib"), views.Select(view => view.Id).ToArray(), options);
 
         return new ExportResult(directory, views.Count, "views");

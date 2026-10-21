@@ -92,6 +92,8 @@ internal sealed class FakeAdapter : IRevitAdapter
 
     public IAdvancedQueryService AdvancedQueryService { get; } = new FakeAdvancedQueryService();
 
+    public ISelectionQueryService SelectionQueryService { get; } = new FakeSelectionQueryService();
+
     public IProjectSettingsService ProjectSettingsService { get; } = new FakeProjectSettingsService();
 
     public ITopographyService TopographyService { get; } = new FakeTopographyService();
@@ -174,6 +176,7 @@ internal sealed class FakeFamilyQueryService : IFamilyQueryService
     {
         var all = new[]
         {
+            new FamilyTypeInfo(300, "基本墙", "常规 - 200mm", "墙"),
             new FamilyTypeInfo(4001, "M_单扇门", "900x2100mm", "门"),
             new FamilyTypeInfo(4002, "M_矩形窗", "1200x1500mm", "窗"),
         };
@@ -208,7 +211,7 @@ internal sealed class FakeElementQueryService : IElementQueryService
         new ElementSummaryInfo(8002, "楼板: 常规 - 150mm", "楼板", "常规 - 150mm"),
     };
 
-    public ElementGeometryInfo? GetElementGeometry(object document, int elementId)
+    public ElementGeometryInfo? GetElementGeometry(object document, int elementId, bool computeReferences = false)
     {
         if (elementId != 8001)
         {
@@ -481,14 +484,23 @@ internal sealed class FakeViewCreationService : IViewCreationService
 
     public int CreateSheet(object document, string? sheetNumber, string? sheetName) => 2203;
 
-    public int CreateTextNote(object document, string text, double xMm, double yMm, int? viewId) => 2204;
+    public int PlaceViewOnSheet(object document, int sheetId, int viewId, double xMm, double yMm) => 2205;
+
+    public int CreateTextNote(
+        object document,
+        string text,
+        double xMm,
+        double yMm,
+        int? viewId,
+        int? textTypeId = null,
+        bool leader = false) => 2204;
 }
 
 internal sealed class FakeFilterService : IFilterService
 {
     public List<string> Calls { get; } = new();
 
-    public int ApplyFilterToView(object document, int? viewId, string filterName, string action, int red, int green, int blue, bool visible)
+    public int ApplyFilterToView(object document, int? viewId, string filterName, string action, int red, int green, int blue, bool visible, int? patternId = null)
     {
         Calls.Add($"{action}:{filterName}");
         return 9001;
@@ -513,7 +525,18 @@ internal sealed class FakeTagCreationService : ITagCreationService
 
 internal sealed class FakeScheduleService : IScheduleService
 {
-    public int CreateSchedule(object document, string categoryName, string? name, IReadOnlyList<string> fields) => 9700;
+    public int CreateSchedule(
+        object document,
+        string categoryName,
+        string? name,
+        IReadOnlyList<string> fields,
+        IReadOnlyList<int>? fieldParameterIds = null,
+        int? sortByParameterId = null,
+        string? sortOrder = null,
+        int? filterFieldParameterId = null,
+        string? filterType = null,
+        string? filterValue = null,
+        int? groupByParameterId = null) => 9700;
 
     public ExportResult ExportScheduleToCsv(object document, int? scheduleId, string? scheduleName, string? outputPath)
         => new(@"C:\Temp\exports\明细表.csv", 12, "rows");
@@ -521,10 +544,22 @@ internal sealed class FakeScheduleService : IScheduleService
 
 internal sealed class FakeExportService : IExportService
 {
-    public ExportResult ExportViewImages(object document, IReadOnlyList<int> viewIds, string? outputDirectory, int pixelSize)
+    public ExportResult ExportViewImages(
+        object document,
+        IReadOnlyList<int> viewIds,
+        string? outputDirectory,
+        int pixelSize,
+        string? quality = null,
+        string? fileNamePattern = null)
         => new(@"C:\Temp\exports", viewIds.Count == 0 ? 1 : viewIds.Count, "images");
 
-    public ExportResult ExportViewsAsDwg(object document, IReadOnlyList<int> viewIds, string? outputDirectory, string? exportSettingName)
+    public ExportResult ExportViewsAsDwg(
+        object document,
+        IReadOnlyList<int> viewIds,
+        string? outputDirectory,
+        string? exportSettingName,
+        bool exportAs3D = false,
+        bool sharedLevels = false)
         => new(@"C:\Temp\exports", viewIds.Count == 0 ? 1 : viewIds.Count, "views");
 }
 
@@ -532,7 +567,21 @@ internal sealed class FakeExportService : IExportService
 
 internal sealed class FakeDimensionCreationService : IDimensionCreationService
 {
-    public int CreateSpotDimension(object document, string kind, int elementId, int? viewId, double xMm, double yMm, int? spotDimensionTypeId, bool hasLeader)
+    public int CreateSpotDimension(
+        object document,
+        string kind,
+        int elementId,
+        int? viewId,
+        double xMm,
+        double yMm,
+        int? spotDimensionTypeId,
+        bool hasLeader,
+        double? bendXmm = null,
+        double? bendYmm = null,
+        double? bendZmm = null,
+        double? endXmm = null,
+        double? endYmm = null,
+        double? endZmm = null)
         => elementId == 8001 ? 9800 : throw new InvalidOperationException($"未找到元素 {elementId}。");
 }
 
@@ -547,7 +596,11 @@ internal sealed class FakeScheduleEditService : IScheduleEditService
         bool replaceFields,
         int? sortByParameterId,
         string? sortOrder,
-        int? groupByParameterId)
+        int? groupByParameterId,
+        int? filterFieldParameterId = null,
+        string? filterType = null,
+        string? filterValue = null,
+        bool showGroupHeader = true)
         => 9700;
 }
 
@@ -671,11 +724,21 @@ internal sealed class FakeMaterialService : IMaterialService
         return info;
     }
 
-    public bool Delete(object document, int? materialId, string? name)
+    public bool Delete(object document, int? materialId, string? name, bool force = false)
     {
         var existing = Get(document, materialId, name);
+        if (existing is not null && existing.Name.Contains("混凝土", StringComparison.OrdinalIgnoreCase) && !force)
+        {
+            throw new InvalidOperationException($"材质 '{existing.Name}' 正在被元素使用，无法删除。");
+        }
+
         return existing is not null && _items.RemoveAll(item => item.MaterialId == existing.MaterialId) > 0;
     }
+
+    public IReadOnlyList<ElementMaterialInfo> GetElementMaterials(object document, IReadOnlyList<int> elementIds)
+        => elementIds.Select(id => id == 8001
+            ? new ElementMaterialInfo(id, true, new[] { _items[0] })
+            : new ElementMaterialInfo(id, false, Array.Empty<MaterialInfo>())).ToArray();
 }
 
 internal sealed class FakeCompoundStructureService : ICompoundStructureService
@@ -938,6 +1001,9 @@ internal sealed class FakeSharedParameterService : ISharedParameterService
         _projectParameters[index] = current with { CategoryNames = set };
         return set.Count;
     }
+
+    public int CountSharedParameterUsage(object document, string parameterName)
+        => string.Equals(parameterName, "自定义参数", StringComparison.OrdinalIgnoreCase) ? 3 : 0;
 }
 
 // ---- 批次 4 第一刀：建模原语 ----
@@ -1206,7 +1272,7 @@ internal sealed class FakeElementOpsService : IElementOpsService
 internal sealed class FakeAdvancedQueryService : IAdvancedQueryService
 {
     private static ElementSummary Sample(int id, string category, string typeName) =>
-        new(id, $"元素{id}", category, 300, typeName, 101, "标高 1");
+        new(id, $"元素{id}", category, 300, typeName, 101, "标高 1", 1000 + id, 2000 + id, 0);
 
     public IReadOnlyList<ElementSummary> QueryElements(
         object document,
@@ -1217,15 +1283,25 @@ internal sealed class FakeAdvancedQueryService : IAdvancedQueryService
         string? typeName,
         int limit)
     {
-        if (string.Equals(operation, "byType", StringComparison.OrdinalIgnoreCase) && typeId is null && string.IsNullOrWhiteSpace(typeName))
+        if (string.Equals(operation, "by_type", StringComparison.OrdinalIgnoreCase) && typeId is null && string.IsNullOrWhiteSpace(typeName))
         {
-            throw new InvalidOperationException("operation=byType 需要提供 typeId 或 typeName。");
+            throw new InvalidOperationException("operation=by_type 需要提供 typeId 或 typeName。");
         }
 
-        return new[]
+        var all = new[]
         {
             Sample(8001, "墙", "常规 - 200mm"),
             Sample(8002, "楼板", "常规 - 100mm"),
+        };
+
+        return operation.ToLowerInvariant() switch
+        {
+            "by_id" => all.Where(element => elementIds.Contains(element.ElementId)).ToArray(),
+            "by_type" => typeId == 300 ? new[] { all[0] } : Array.Empty<ElementSummary>(),
+            "by_category" => string.Equals(categoryName, "墙", StringComparison.OrdinalIgnoreCase)
+                ? new[] { all[0] }
+                : all,
+            _ => all,
         };
     }
 
@@ -1283,15 +1359,40 @@ internal sealed class FakeAdvancedQueryService : IAdvancedQueryService
         return new ScheduleDataInfo(scheduleName ?? "墙明细表", headers, rows, 2, rows.Count);
     }
 
-    public IReadOnlyList<CollisionPairInfo> CheckCollision(object document, IReadOnlyList<int> sourceIds, IReadOnlyList<int> targetIds)
+    public IReadOnlyList<CollisionPairInfo> CheckCollision(
+        object document,
+        IReadOnlyList<int> sourceIds,
+        IReadOnlyList<int> targetIds,
+        int? sourceLinkInstanceId = null,
+        int? targetLinkInstanceId = null)
         => sourceIds.Contains(8001) && (targetIds.Count == 0 || targetIds.Contains(8002))
-            ? new[] { new CollisionPairInfo(8001, 8002, true) }
-            : new[] { new CollisionPairInfo(sourceIds.FirstOrDefault(), -1, false) };
+            ? new[]
+            {
+                new CollisionPairInfo(
+                    8001,
+                    8002,
+                    true,
+                    sourceLinkInstanceId is null ? 0 : 1,
+                    targetLinkInstanceId is null ? 0 : 1,
+                    sourceLinkInstanceId,
+                    targetLinkInstanceId,
+                    "墙",
+                    "楼板",
+                    "常规 - 200mm",
+                    "常规 - 100mm",
+                    new[] { new Point3(1200, 2200, 0) }),
+            }
+            : Array.Empty<CollisionPairInfo>();
 
     public bool DeleteLink(object document, int linkId)
         => linkId == 11001
             ? true
             : throw new InvalidOperationException($"元素 {linkId} 不是 Revit 链接。");
+}
+
+internal sealed class FakeSelectionQueryService : ISelectionQueryService
+{
+    public IReadOnlyList<int> GetSelectedElementIds(object uiDocument) => new[] { 8001, 8002 };
 }
 
 internal sealed class FakeProjectSettingsService : IProjectSettingsService
@@ -1339,14 +1440,87 @@ internal sealed class FakeInsulationService : IInsulationService
                 new InsulationInfo(300, "常规 - 200mm", "常规 - 200mm", false, 200, "混凝土", 1),
             };
 
-    public int ManageInsulation(
+    public InsulationMutationResult ManageInsulation(
         object document,
         string operation,
         IReadOnlyList<int> elementIds,
         double? thicknessMm,
         string? materialName,
-        bool overrideExisting)
-        => elementIds.Contains(9999) ? 0 : elementIds.Count;
+        bool overrideExisting,
+        int? systemTypeId)
+    {
+        if (elementIds.Contains(9999))
+        {
+            return new InsulationMutationResult(
+                operation,
+                elementIds.Count,
+                0,
+                0,
+                elementIds.Count - 1,
+                1,
+                Array.Empty<int>(),
+                new[] { 9999 },
+                new[] { "9999: 不支持的元素类型" },
+                thicknessMm,
+                materialName,
+                systemTypeId,
+                "水管");
+        }
+
+        return operation switch
+        {
+            "modify_thickness" or "modify_material" => new InsulationMutationResult(
+                operation,
+                Math.Max(elementIds.Count, systemTypeId is null ? 0 : 1),
+                0,
+                Math.Max(elementIds.Count, systemTypeId is null ? 0 : 1),
+                0,
+                0,
+                elementIds,
+                Array.Empty<int>(),
+                Array.Empty<string>(),
+                thicknessMm,
+                materialName,
+                systemTypeId,
+                systemTypeId is null ? "水管" : "家用冷水"),
+            _ => new InsulationMutationResult(
+                operation,
+                Math.Max(elementIds.Count, systemTypeId is null ? 0 : 1),
+                Math.Max(elementIds.Count, systemTypeId is null ? 0 : 1),
+                0,
+                0,
+                0,
+                elementIds,
+                Array.Empty<int>(),
+                Array.Empty<string>(),
+                thicknessMm,
+                materialName,
+                systemTypeId,
+                systemTypeId is null ? "水管" : "家用冷水"),
+        };
+    }
+
+    public IReadOnlyList<InsulationInfo> QueryMepInsulation(
+        object document,
+        IReadOnlyList<int> elementIds,
+        string target,
+        bool onlyUninsulated,
+        int limit)
+        => elementIds.Select((id, index) =>
+            new InsulationInfo(
+                id,
+                $"管道 {id}",
+                "Pipe",
+                index % 2 == 0,
+                index % 2 == 0 ? 30 : 0,
+                index % 2 == 0 ? "岩棉" : string.Empty,
+                0))
+            .Where(info => !onlyUninsulated || !info.HasInsulation)
+            .Take(limit <= 0 ? 200 : limit)
+            .ToArray();
+
+    public IReadOnlyList<string> ListInsulationTypes(object document, string target)
+        => new[] { "管道保温 - 30mm", "风管保温 - 25mm" };
 }
 
 internal sealed class FakeMepSystemService : IMepSystemService
@@ -1364,27 +1538,94 @@ internal sealed class FakeMepSystemService : IMepSystemService
             new Dictionary<string, int> { ["100"] = 2, ["50"] = 1 }),
     };
 
-    public IReadOnlyList<MepSystemInfo> QuerySystems(object document, string operation, int? systemTypeId, bool onlyUninsulated, int limit)
-        => _systems.Values
-            .Where(system => !onlyUninsulated || system.UninsulatedMemberCount > 0)
-            .Take(limit <= 0 ? 200 : limit)
-            .ToArray();
+    public MepSystemQueryResult QueryMepSystems(
+        object document,
+        string operation,
+        string target,
+        int? systemTypeId,
+        bool onlyUninsulated,
+        bool includeSizeDistribution,
+        bool includeCategoryBreakdown,
+        bool includeFittings,
+        int limit)
+    {
+        var instance = _systems.Values.First();
+        var systems = new[]
+        {
+            new MepSystemTypeInfo(
+                700,
+                "家用冷水",
+                "Piping",
+                "水管",
+                instance.MemberCount,
+                instance.MemberCount - instance.UninsulatedMemberCount,
+                instance.UninsulatedMemberCount,
+                true,
+                true,
+                true,
+                true,
+                66.7),
+        };
+        if (onlyUninsulated)
+        {
+            systems = systems.Where(system => system.UninsulatedCount > 0).ToArray();
+        }
+
+        var elements = systemTypeId is null ? Array.Empty<int>() : instance.MemberIds.ToArray();
+        var breakdown = includeCategoryBreakdown || operation == "category_breakdown"
+            ? new Dictionary<string, int> { ["管道"] = 2, ["管件"] = 1 }
+            : new Dictionary<string, int>();
+        var sizes = includeSizeDistribution || operation == "size_distribution"
+            ? new Dictionary<string, int> { ["100"] = 2, ["50"] = 1 }
+            : new Dictionary<string, int>();
+        var properties = operation == "get_properties"
+            ? new Dictionary<string, object?> { ["name"] = "家用冷水", ["system_classification"] = "Piping" }
+            : null;
+
+        return new MepSystemQueryResult(
+            operation,
+            target,
+            systems,
+            elements,
+            breakdown,
+            sizes,
+            properties,
+            systems.Length,
+            systems.Count(system => system.IsInUse),
+            systems.Count(system => !system.IsInUse),
+            operation == "system_details" ? "系统 家用冷水: 3 个元素" : null);
+    }
 
     public MepSystemInfo? CreateSystem(object document, int systemTypeId, string? newName)
         => systemTypeId == 9999
             ? throw new InvalidOperationException($"元素 {systemTypeId} 不是管道/风管系统类型。")
             : new MepSystemInfo(9600, newName ?? "新建系统", "家用冷水", "piping", 0, Array.Empty<int>(), 0, new Dictionary<string, int>());
 
+    public MepSystemInfo? DuplicateSystem(object document, int sourceSystemTypeId, string newName)
+        => sourceSystemTypeId == 9999
+            ? throw new InvalidOperationException($"找不到源系统类型 ID: {sourceSystemTypeId}")
+            : new MepSystemInfo(9700, newName, "家用冷水", "piping", 0, Array.Empty<int>(), 0, new Dictionary<string, int>());
+
     public int RenameSystem(object document, int systemId, string newName)
-        => _systems.ContainsKey(systemId)
+        => systemId is 700 or 9500
             ? 1
-            : throw new InvalidOperationException($"元素 {systemId} 不是 MEP 系统。");
+            : throw new InvalidOperationException($"元素 {systemId} 不是 MEP 系统类型。");
 
     public bool DeleteSystem(object document, int systemId, bool force)
     {
+        if (systemId == 700)
+        {
+            if (!force)
+            {
+                throw new InvalidOperationException("系统类型 '家用冷水' 正在被 3 个元素使用，无法删除。请先更改元素系统类型，或用 force=true。");
+            }
+
+            return true;
+        }
+
         if (!_systems.TryGetValue(systemId, out var system))
         {
-            throw new InvalidOperationException($"元素 {systemId} 不是 MEP 系统。");
+            throw new InvalidOperationException($"元素 {systemId} 不是 MEP 系统类型。");
         }
 
         if (system.MemberCount > 0 && !force)
@@ -1421,23 +1662,61 @@ internal sealed class FakeDomainExtraService : IDomainExtraService
             new List<string> { "轮廓来自墙中心线首尾相接的闭合环" });
     }
 
-    public IReadOnlyList<CadLayerInfo> ManageCadLayers(object document, int viewId, int linkId, string operation, string? layerName)
+    public CadQueryResult QueryCad(object document, int linkId, string operation, string? layerName)
     {
         if (linkId == 9999)
         {
             throw new InvalidOperationException($"未找到 CAD 链接/导入元素 {linkId}。");
         }
 
-        return (operation ?? "list").Trim().ToLowerInvariant() switch
+        var layers = new List<CadLayerInfo>
         {
-            "list" => new List<CadLayerInfo>
-            {
-                new("A-WALL", 5001, true),
-                new("A-DOOR", 5002, false),
-            },
-            "show" or "hide" => new List<CadLayerInfo> { new(layerName ?? "A-WALL", 5001, operation == "show") },
-            _ => throw new InvalidOperationException("operation 只支持 list / show / hide。"),
+            new("A-WALL", 5001, true, 7, false, "Continuous"),
+            new("A-DOOR", 5002, false, 3, false, "Dashed"),
         };
+        var lines = new List<CadLineInfo>
+        {
+            new("A-WALL", "Line", 0, 0, 0, 5000, 0, 0),
+            new("A-WALL", "LwPolyline", 0, 0, 0, 0, 3000, 0),
+        };
+        var texts = new List<CadTextInfo>
+        {
+            new("A-WALL", "办公室", 1000, 1000, 0, 250, 1000, 0),
+        };
+        var blocks = new List<CadBlockInfo>
+        {
+            new("A-DOOR", "DOOR", 2000, 0, 0, 1, 1, 1, 90),
+        };
+        var filteredLines = layerName is null ? lines : lines.Where(line => line.LayerName == layerName).ToList();
+        var filteredTexts = layerName is null ? texts : texts.Where(text => text.LayerName == layerName).ToList();
+        var filteredBlocks = layerName is null ? blocks : blocks.Where(block => block.LayerName == layerName).ToList();
+        var analysis = layers.Select(layer =>
+            new CadAnalysisLayerInfo(
+                layer.Name,
+                blocks.Count(block => block.LayerName == layer.Name),
+                lines.Count(line => line.LayerName == layer.Name),
+                texts.Count(text => text.LayerName == layer.Name),
+                lines.Count(line => line.LayerName == layer.Name)
+                + texts.Count(text => text.LayerName == layer.Name)
+                + blocks.Count(block => block.LayerName == layer.Name),
+                false,
+                layer.ColorIndex,
+                layer.Visible,
+                layer.IsLocked,
+                new[] { "测试内容" })).ToList();
+
+        return new CadQueryResult(
+            operation,
+            linkId,
+            "CAD 文件",
+            layers.Count,
+            analysis.Count(layer => layer.TotalCount > 0),
+            operation == "get_layers" ? layers : new List<CadLayerInfo>(),
+            operation == "get_lines" ? filteredLines : new List<CadLineInfo>(),
+            operation == "get_texts" ? filteredTexts : new List<CadTextInfo>(),
+            operation == "get_blocks" ? filteredBlocks : new List<CadBlockInfo>(),
+            operation == "analyze" ? analysis : new List<CadAnalysisLayerInfo>(),
+            null);
     }
 
     public CutOrderResult FixCuttingOrder(object document, IReadOnlyList<int> cuttingIds, IReadOnlyList<int> toCutIds, bool dryRun)

@@ -39,4 +39,6 @@ public interface ISharedParameterService
 
     /// <summary>给已有项目参数增删类别，返回变更后的类别数量。</summary>
     int UpdateProjectParameterCategories(object document, string parameterName, IReadOnlyList<string> categoryNames, bool add);
+
+    int CountSharedParameterUsage(object document, string parameterName);
 }

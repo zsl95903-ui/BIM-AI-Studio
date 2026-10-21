@@ -2,14 +2,19 @@
 
 ## Tool-layer source set
 
-`rebuilt-120-tools/` contains the tool layer of a third-party Revit add-in (tools, services and contracts), retained for reference and maintenance.
+`clean-room-tools/` is the project-maintained clean-room tool layer for the 120-tool catalog.
 
-- It is a derivative work. The Apache-2.0 license of this repository does **not** automatically apply to it.
-- Original installers, compiled assemblies and de-obfuscation intermediates are **not** distributed.
-- UI, account, billing, entitlement and update modules are **not** included.
-- Online service endpoints in the retained code are placeholders; nothing connects to a real backend.
+- The source, contracts, tests, generators and build scripts are licensed under Apache-2.0.
+- Tool classes are generated from the checked-in JSON contract catalog at build time.
+- Legacy decompiled source, original assemblies and de-obfuscation intermediates are not distributed.
+- UI, account, billing, entitlement and update modules are not included.
 
-Anyone redistributing this directory must independently verify the upstream license and applicable law.
+## NuGet dependency
+
+- `ACadSharp` 3.4.9
+  - MIT license
+  - Used for DWG/DXF parsing
+  - Restored through NuGet; not committed to this repository
 
 ## Build dependency
 
@@ -25,10 +30,11 @@ Project-authored code references only:
 - `System.*` from the .NET runtime;
 - `Autodesk.Revit.*` from the locally installed Revit API.
 
-There are no NuGet `PackageReference` entries.
+The `ReVitAI.Bridge` projects have no NuGet `PackageReference` entries.
+`clean-room-tools` uses the MIT-licensed `ACadSharp` 3.4.9 package.
 
 ## Release packages
 
-Release packages contain only the project-authored `ReVitAI.Bridge` assembly and installer scripts. Any future package that adds a third-party binary must record the component name, version, source URL, license and redistribution status here before release.
+Release packages may contain the project-authored `ReVitAI.Bridge` assembly and the Apache-2.0 clean-room tool layer. Any future package that adds a third-party binary must record the component name, version, source URL, license and redistribution status here before release.
 
 See [docs/third-party-audit.md](docs/third-party-audit.md).

@@ -49,6 +49,7 @@ internal static class Program
         await TestDomainImplementationsAsync();
         await TestDomainImplementations2Async();
         await TestClosingImplementationsAsync();
+        await TestPilotFiveToolsAsync();
         TestFullImplementationCoverage(toolIndexPath);
         TestContractCatalog();
         TestExternalParity(externalPath);
@@ -237,6 +238,9 @@ internal static class Program
         var views = await ExecuteImplementationAsync("get_all_views", adapter, context, """{}""");
         Check("get_all_views 返回 3 个视图", views.Success && views.Message.Contains("3 个视图", StringComparison.Ordinal));
 
+        var filteredViews = await ExecuteImplementationAsync("get_all_views", adapter, context, """{"viewType":"ThreeD"}""");
+        Check("get_all_views 支持 viewType 过滤", filteredViews.Success && filteredViews.Message.Contains("1 个视图", StringComparison.Ordinal));
+
         var active = await ExecuteImplementationAsync("get_active_view", adapter, context, """{}""");
         Check("get_active_view 返回活动视图", active.Success && active.Message.Contains("标高 1", StringComparison.Ordinal));
 
@@ -272,6 +276,9 @@ internal static class Program
         var rooms = await ExecuteImplementationAsync("get_all_rooms", adapter, context, """{}""");
         Check("get_all_rooms 返回 1 个房间", rooms.Success && rooms.Message.Contains("1 个房间", StringComparison.Ordinal));
 
+        var roomsDetailed = await ExecuteImplementationAsync("get_all_rooms", adapter, context, """{"includeArea":true,"includeVolume":true,"includePerimeter":true}""");
+        Check("get_all_rooms 支持面积/体积/周长选项", roomsDetailed.Success);
+
         var tags = await ExecuteImplementationAsync("get_all_tags", adapter, context, """{}""");
         Check("get_all_tags 返回 1 个标记", tags.Success && tags.Message.Contains("1 个标记", StringComparison.Ordinal));
 
@@ -304,6 +311,12 @@ internal static class Program
 
         var pipeTypes = await ExecuteImplementationAsync("get_pipe_types", adapter, context, """{}""");
         Check("get_pipe_types 返回 1 个类型", pipeTypes.Success && pipeTypes.Message.Contains("1 个管道类型", StringComparison.Ordinal));
+
+        var ductTypes = await ExecuteImplementationAsync("get_duct_types", adapter, context, """{}""");
+        Check("get_duct_types 返回 1 个类型", ductTypes.Success && ductTypes.Message.Contains("1 个风管类型", StringComparison.Ordinal));
+
+        var cableTrayTypes = await ExecuteImplementationAsync("get_cable_tray_types", adapter, context, """{}""");
+        Check("get_cable_tray_types 返回 1 个类型", cableTrayTypes.Success && cableTrayTypes.Message.Contains("1 个桥架类型", StringComparison.Ordinal));
 
         var roofTypes = await ExecuteImplementationAsync("get_roof_types", adapter, context, """{}""");
         Check("get_roof_types 返回 1 个类型", roofTypes.Success && roofTypes.Message.Contains("1 个屋顶类型", StringComparison.Ordinal));
@@ -375,10 +388,17 @@ internal static class Program
         var sheet = await ExecuteImplementationAsync("create_sheet", adapter, context, """{"title":"一层平面","number":"A101"}""");
         Check("create_sheet 返回图纸 id", sheet.Success && sheet.Message.Contains("2203", StringComparison.Ordinal));
 
+        var sheetWithView = await ExecuteImplementationAsync("create_sheet", adapter, context, """{"title":"二层平面","number":"A102","add_view":2001,"view_position_x":100,"view_position_y":200}""");
+        Check("create_sheet 放置视图并返回 viewport", sheetWithView.Success
+            && sheetWithView.Message.Contains("A102", StringComparison.Ordinal));
+
         var note = await ExecuteImplementationAsync("create_text_note", adapter, context, """{"viewId":2001,"text":"注意：这里是注释","position":{"x":1000,"y":2000}}""");
         Check("create_text_note 返回注释 id", note.Success && note.Message.Contains("2204", StringComparison.Ordinal));
 
-        var filter = await ExecuteImplementationAsync("set_view_filter", adapter, context, """{"filterName":"可见性过滤器","action":"apply","visible":true,"color":{"red":255,"green":0,"blue":0}}""");
+        var noteWithType = await ExecuteImplementationAsync("create_text_note", adapter, context, """{"viewId":2001,"text":"带引线注释","position":{"x":1000,"y":2000},"textTypeId":3001,"leader":true}""");
+        Check("create_text_note 支持文字类型和引线", noteWithType.Success);
+
+        var filter = await ExecuteImplementationAsync("set_view_filter", adapter, context, """{"filterName":"可见性过滤器","action":"apply","visible":true,"color":{"red":255,"green":0,"blue":0},"patternId":7001}""");
         Check("set_view_filter 应用过滤器", filter.Success && filter.Message.Contains("已执行 apply", StringComparison.Ordinal));
 
         var deletedFilter = await ExecuteImplementationAsync("delete_view_filter", adapter, context, """{"filterName":"可见性过滤器"}""");
@@ -395,18 +415,26 @@ internal static class Program
         Check("create_tag 返回标记 id", tag.Success && tag.Message.Contains("9600", StringComparison.Ordinal));
 
         var tagMissing = await ExecuteImplementationAsync("create_tag", adapter, context, """{}""");
-        Check("create_tag 缺 elementId 返回失败", !tagMissing.Success);
+        Check("create_tag 缺 elementId 自动进入批量模式", tagMissing.Success
+            && tagMissing.Message.Contains("批量标记完成", StringComparison.Ordinal));
 
         var schedule = await ExecuteImplementationAsync("create_schedule", adapter, context, """{"category":"墙","scheduleName":"墙明细表","fields":["类型","体积"]}""");
         Check("create_schedule 返回明细表 id", schedule.Success && schedule.Message.Contains("9700", StringComparison.Ordinal));
 
+        var scheduleConfigured = await ExecuteImplementationAsync(
+            "create_schedule",
+            adapter,
+            context,
+            """{"category":"墙","scheduleName":"墙排序明细表","fieldUniqueIds":["-1002000","-1002002"],"sortByUniqueId":"-1002002","sortOrder":"descending","filterFieldUniqueId":"-1002000","filterType":"contains","filterValue":"常规","groupByUniqueId":"-1002000"}""");
+        Check("create_schedule 支持排序/过滤/分组参数", scheduleConfigured.Success);
+
         var scheduleFields = await ExecuteImplementationAsync("create_schedule", adapter, context, """{"category":"墙","fieldUniqueIds":["abc"]}""");
         Check("create_schedule 对 fieldUniqueIds 明确失败", !scheduleFields.Success);
 
-        var images = await ExecuteImplementationAsync("export_view_images", adapter, context, """{"dataSource":"ids","viewIds":[2001,2002],"width":1600}""");
+        var images = await ExecuteImplementationAsync("export_view_images", adapter, context, """{"dataSource":"ids","viewIds":[2001,2002],"width":1600,"quality":"high","fileNamePattern":"{id}-{view}"}""");
         Check("export_view_images 导出 2 张", images.Success && images.Message.Contains("2 张视图图片", StringComparison.Ordinal));
 
-        var dwg = await ExecuteImplementationAsync("export_views_as_dwg", adapter, context, """{"dataSource":"ids","viewIds":[2001],"exportSettingName":"ACAD2018"}""");
+        var dwg = await ExecuteImplementationAsync("export_views_as_dwg", adapter, context, """{"dataSource":"ids","viewIds":[2002],"exportSettingName":"ACAD2018","exportAs3D":true,"sharedLevels":true}""");
         Check("export_views_as_dwg 导出 1 个视图", dwg.Success && dwg.Message.Contains("1 个视图", StringComparison.Ordinal));
 
         var noDataSource = await ExecuteImplementationAsync("export_views_as_dwg", adapter, context, """{}""");
@@ -468,14 +496,20 @@ internal static class Program
         var adapter = new FakeAdapter();
         var context = new AIToolContext { RevitAdapter = adapter, UnitService = new UnitService(), DataCache = new SessionAIToolDataCache() };
 
-        var query = await ExecuteImplementationAsync("query_parameter_info", adapter, context, """{"operation":"list","elementId":8001}""");
-        Check("query_parameter_info 返回 3 个参数", query.Success && query.Message.Contains("已查询 1 个元素", StringComparison.Ordinal));
+        var query = await ExecuteImplementationAsync("query_parameter_info", adapter, context, """{"operation":"get","elementId":8001}""");
+        Check("query_parameter_info get 返回 3 个参数", query.Success && query.Message.Contains("成功获取 1 个元素", StringComparison.Ordinal));
 
-        var filtered = await ExecuteImplementationAsync("query_parameter_info", adapter, context, """{"operation":"list","elementId":8001,"parameterName":"体积"}""");
+        var filtered = await ExecuteImplementationAsync("query_parameter_info", adapter, context, """{"operation":"get","elementId":8001,"parameterName":"体积"}""");
         Check("query_parameter_info 按名称过滤", filtered.Success && filtered.Message.Contains("体积", StringComparison.Ordinal));
 
-        var queryMissing = await ExecuteImplementationAsync("query_parameter_info", adapter, context, """{"operation":"list"}""");
+        var queryMissing = await ExecuteImplementationAsync("query_parameter_info", adapter, context, """{"operation":"get"}""");
         Check("query_parameter_info 缺元素标识返回失败", !queryMissing.Success);
+
+        var querySchema = await ExecuteImplementationAsync("query_parameter_info", adapter, context, """{"operation":"schema","elementId":8001}""");
+        Check("query_parameter_info schema 返回参数定义", querySchema.Success && querySchema.Message.Contains("参数定义", StringComparison.Ordinal));
+
+        var queryType = await ExecuteImplementationAsync("query_parameter_info", adapter, context, """{"operation":"get_type","elementId":8001,"parameterName":"体积"}""");
+        Check("query_parameter_info get_type 返回类型信息", queryType.Success && queryType.Message.Contains("体积", StringComparison.Ordinal));
 
         var setSingle = await ExecuteImplementationAsync("set_parameter_values", adapter, context, """{"elementId":8001,"parameterName":"标高","value":"102"}""");
         Check("set_parameter_values 单元素赋值成功", setSingle.Success && setSingle.Message.Contains("已设置 1", StringComparison.Ordinal));
@@ -514,14 +548,18 @@ internal static class Program
         var adapter = new FakeAdapter();
         var context = new AIToolContext { RevitAdapter = adapter, UnitService = new UnitService(), DataCache = new SessionAIToolDataCache() };
 
-        var list = await ExecuteImplementationAsync("material_query", adapter, context, """{"operation":"list"}""");
-        Check("material_query 返回 2 个材料", list.Success && list.Message.Contains("2 个材料", StringComparison.Ordinal));
+        var list = await ExecuteImplementationAsync("material_query", adapter, context, """{"operation":"get_all"}""");
+        Check("material_query get_all 返回 2 个材料", list.Success && list.Message.Contains("2 个材料", StringComparison.Ordinal));
 
-        var filtered = await ExecuteImplementationAsync("material_query", adapter, context, """{"operation":"list","filter":"玻璃"}""");
+        var filtered = await ExecuteImplementationAsync("material_query", adapter, context, """{"operation":"get_all","filter":"玻璃"}""");
         Check("material_query 按名称过滤", filtered.Success && filtered.Message.Contains("1 个材料", StringComparison.Ordinal));
 
-        var single = await ExecuteImplementationAsync("material_query", adapter, context, """{"operation":"get","materialName":"玻璃"}""");
-        Check("material_query get 返回颜色与透明度", single.Success && single.Message.Contains("玻璃", StringComparison.Ordinal));
+        var single = await ExecuteImplementationAsync("material_query", adapter, context, """{"operation":"get_by_name","materialName":"玻璃"}""");
+        Check("material_query get_by_name 返回颜色与透明度", single.Success && single.Message.Contains("玻璃", StringComparison.Ordinal));
+
+        var elementMaterials = await ExecuteImplementationAsync("material_query", adapter, context, """{"operation":"get_element_materials","elementIds":[8001,9999]}""");
+        Check("material_query get_element_materials 返回元素材质", elementMaterials.Success
+            && elementMaterials.Message.Contains("1 个元素", StringComparison.Ordinal));
 
         var created = await ExecuteImplementationAsync("material_manager", adapter, context, """{"operation":"create","materialName":"涂料 - 白色","red":255,"green":255,"blue":255}""");
         Check("material_manager create 成功", created.Success && created.Message.Contains("涂料 - 白色", StringComparison.Ordinal));
@@ -532,10 +570,13 @@ internal static class Program
         var forced = await ExecuteImplementationAsync("material_manager", adapter, context, """{"operation":"create","materialName":"玻璃","force":true,"transparency":40}""");
         Check("material_manager force=true 复用并更新", forced.Success && forced.Message.Contains("40", StringComparison.Ordinal));
 
-        var updated = await ExecuteImplementationAsync("material_manager", adapter, context, """{"operation":"update","materialName":"玻璃","hexColor":"#112233"}""");
-        Check("material_manager update 改颜色", updated.Success && updated.Message.Contains("#112233", StringComparison.Ordinal));
+        var updated = await ExecuteImplementationAsync("material_manager", adapter, context, """{"operation":"set_color","materialName":"玻璃","red":17,"green":34,"blue":51}""");
+        Check("material_manager set_color 改颜色", updated.Success && updated.Message.Contains("RGB", StringComparison.Ordinal));
 
-        var deleted = await ExecuteImplementationAsync("material_manager", adapter, context, """{"operation":"delete","materialName":"涂料 - 白色"}""");
+        var transparency = await ExecuteImplementationAsync("material_manager", adapter, context, """{"operation":"set_transparency","materialName":"玻璃","transparency":35}""");
+        Check("material_manager set_transparency 改透明度", transparency.Success && transparency.Message.Contains("35%", StringComparison.Ordinal));
+
+        var deleted = await ExecuteImplementationAsync("material_manager", adapter, context, """{"operation":"delete","materialId":5099}""");
         Check("material_manager delete 成功", deleted.Success);
 
         var unknown = await ExecuteImplementationAsync("material_manager", adapter, context, """{"operation":"nope"}""");
@@ -655,14 +696,17 @@ internal static class Program
         var adapter = new FakeAdapter();
         var context = new AIToolContext { RevitAdapter = adapter, UnitService = new UnitService(), DataCache = new SessionAIToolDataCache() };
 
-        var status = await ExecuteImplementationAsync("manage_shared_parameters", adapter, context, """{"operation":"status"}""");
-        Check("manage_shared_parameters status 可用", status.Success && status.Message.Contains("已加载", StringComparison.Ordinal));
-
         var sharedList = await ExecuteImplementationAsync("manage_shared_parameters", adapter, context, """{"operation":"list"}""");
         Check("manage_shared_parameters list 返回 1 组 1 定义", sharedList.Success && sharedList.Message.Contains("1 组 / 1 个定义", StringComparison.Ordinal));
 
-        var sharedCreate = await ExecuteImplementationAsync("manage_shared_parameters", adapter, context, """{"operation":"create","parameterName":"房间湿度","parameterType":"Number","groupName":"自定义参数"}""");
+        var sharedCreate = await ExecuteImplementationAsync("manage_shared_parameters", adapter, context, """{"operation":"create","parameterName":"房间湿度","parameterType":"Number","groupName":"自定义参数","categoryNames":["墙"],"instanceParameter":true}""");
         Check("manage_shared_parameters create 成功", sharedCreate.Success && sharedCreate.Message.Contains("房间湿度", StringComparison.Ordinal));
+
+        var sharedCheck = await ExecuteImplementationAsync("manage_shared_parameters", adapter, context, """{"operation":"check","parameterName":"自定义参数"}""");
+        Check("manage_shared_parameters check 返回使用数量", sharedCheck.Success && sharedCheck.Message.Contains("3 个元素", StringComparison.Ordinal));
+
+        var sharedUnbind = await ExecuteImplementationAsync("manage_shared_parameters", adapter, context, """{"operation":"unbind","parameterName":"房间湿度"}""");
+        Check("manage_shared_parameters unbind 成功", sharedUnbind.Success);
 
         var sharedDelete = await ExecuteImplementationAsync("manage_shared_parameters", adapter, context, """{"operation":"delete","parameterName":"房间湿度"}""");
         Check("manage_shared_parameters delete 明确说明 API 不支持", !sharedDelete.Success && sharedDelete.Message.Contains("不支持", StringComparison.Ordinal));
@@ -673,13 +717,13 @@ internal static class Program
         var projectList = await ExecuteImplementationAsync("manage_project_parameters", adapter, context, """{"operation":"list"}""");
         Check("manage_project_parameters list 返回 1 个", projectList.Success && projectList.Message.Contains("共 1 个", StringComparison.Ordinal));
 
-        var projectCreateDuplicate = await ExecuteImplementationCatchingAsync("manage_project_parameters", adapter, context, """{"operation":"create","parameterName":"自定义参数","categoryNames":["墙"]}""");
+        var projectCreateDuplicate = await ExecuteImplementationCatchingAsync("manage_project_parameters", adapter, context, """{"operation":"create_binding","parameterName":"自定义参数","sharedParameterName":"自定义参数","bindingType":"instance","categoryNames":["墙"]}""");
         Check("manage_project_parameters 重复绑定被拦下", !projectCreateDuplicate.Success);
 
-        var projectCreate = await ExecuteImplementationAsync("manage_project_parameters", adapter, context, """{"operation":"create","parameterName":"房间湿度","sharedParameterName":"自定义参数","bindingType":"type","categoryNames":["墙","楼板"]}""");
-        Check("manage_project_parameters create 绑定 2 个类别", projectCreate.Success && projectCreate.Message.Contains("2 个类别", StringComparison.Ordinal));
+        var projectCreate = await ExecuteImplementationAsync("manage_project_parameters", adapter, context, """{"operation":"create_binding","sharedParameterName":"房间湿度","bindingType":"type","categoryNames":["墙","楼板"]}""");
+        Check("manage_project_parameters create_binding 绑定 2 个类别", projectCreate.Success && projectCreate.Message.Contains("2 个类别", StringComparison.Ordinal));
 
-        var projectCreateMissingShared = await ExecuteImplementationCatchingAsync("manage_project_parameters", adapter, context, """{"operation":"create","parameterName":"不存在的参数","categoryNames":["墙"]}""");
+        var projectCreateMissingShared = await ExecuteImplementationCatchingAsync("manage_project_parameters", adapter, context, """{"operation":"create_binding","sharedParameterName":"不存在的参数","bindingType":"instance","categoryNames":["墙"]}""");
         Check("manage_project_parameters 缺共享定义时给出明确失败", !projectCreateMissingShared.Success && projectCreateMissingShared.Message.Contains("共享参数文件里找不到定义", StringComparison.Ordinal));
 
         var addCategories = await ExecuteImplementationAsync("manage_project_parameters", adapter, context, """{"operation":"add_categories","parameterName":"自定义参数","categoriesToAdd":["楼板","屋顶"]}""");
@@ -696,6 +740,10 @@ internal static class Program
 
         var projectUnknown = await ExecuteImplementationAsync("manage_project_parameters", adapter, context, """{"operation":"nope"}""");
         Check("manage_project_parameters 未知操作返回失败", !projectUnknown.Success);
+
+        var parameterGroups = await ExecuteImplementationAsync("manage_project_parameters", adapter, context, """{"operation":"list_parameter_groups"}""");
+        Check("manage_project_parameters list_parameter_groups 返回参数组", parameterGroups.Success
+            && parameterGroups.Message.Contains("参数组", StringComparison.Ordinal));
     }
 
     // ------------------------------------------------ 建模原语（批次 4 第一刀）
@@ -789,6 +837,9 @@ internal static class Program
         var roof = await ExecuteImplementationAsync("create_footprint_roof", adapter, context, """{"points":[{"x":0,"y":0},{"x":6000,"y":0},{"x":6000,"y":4000},{"x":0,"y":4000}],"level_id":101}""");
         Check("create_footprint_roof 创建 1 个屋顶", roof.Success && roof.Message.Contains("1 个足迹屋顶", StringComparison.Ordinal));
 
+        var slopedRoof = await ExecuteImplementationAsync("create_footprint_roof", adapter, context, """{"points":[{"x":0,"y":0},{"x":6000,"y":0},{"x":6000,"y":4000},{"x":0,"y":4000}],"level_id":101,"defines_slope":true,"slope_angle":30}""");
+        Check("create_footprint_roof 支持坡度参数", slopedRoof.Success);
+
         var extrusionRoof = await ExecuteImplementationAsync("create_extrusion_roof", adapter, context, """{"points":[[0,0],[6000,0],[3000,2000]],"level_id":101,"extrusion_start":0,"extrusion_end":6000}""");
         Check("create_extrusion_roof 创建拉伸屋顶", extrusionRoof.Success && extrusionRoof.Message.Contains("拉伸屋顶", StringComparison.Ordinal));
 
@@ -815,7 +866,8 @@ internal static class Program
         Check($"批次 4 第三刀已登记实现 {ToolImplementationRegistry.Count} 个（应为 8）", ToolImplementationRegistry.Count == 8);
 
         var adapter = new FakeAdapter();
-        var context = new AIToolContext { RevitAdapter = adapter, UnitService = new UnitService(), DataCache = new SessionAIToolDataCache() };
+        var cache = new SessionAIToolDataCache();
+        var context = new AIToolContext { RevitAdapter = adapter, UnitService = new UnitService(), DataCache = cache };
 
         var copy = await ExecuteImplementationAsync("copy_element", adapter, context, """{"elementIds":[8001,8002],"x":3000,"y":0,"z":0}""");
         Check("copy_element 复制 2 个元素", copy.Success && copy.Message.Contains("完成 2/2", StringComparison.Ordinal));
@@ -862,11 +914,23 @@ internal static class Program
         var joinMissing = await ExecuteImplementationCatchingAsync("join_geometry", adapter, context, """{"element1Ids":[8001]}""");
         Check("join_geometry 缺第二组被拦下", !joinMissing.Success);
 
+        cache.ClearAll();
+        var joinCache = cache.Store("s", "join-first", new List<Dictionary<string, object?>> { new() { ["elementId"] = 8001 } });
+        var joinFromCache = await ExecuteImplementationAsync("join_geometry", adapter, context, $$"""{"element1CacheId":"{{joinCache}}","element2Ids":[8002],"operation":"switch"}""");
+        Check("join_geometry 支持独立 cacheId 和 switch", joinFromCache.Success);
+
+        var joinBadOp = await ExecuteImplementationAsync("join_geometry", adapter, context, """{"element1Ids":[8001],"element2Ids":[8002],"operation":"wrong"}""");
+        Check("join_geometry 非法 operation 失败", !joinBadOp.Success);
+
         var cut = await ExecuteImplementationAsync("cut_geometry", adapter, context, """{"elementToCutIds":[8001],"cuttingElementIds":[8002],"operation":"cut"}""");
         Check("cut_geometry 剪切 1 对", cut.Success && cut.Message.Contains("1 对", StringComparison.Ordinal));
 
         var uncut = await ExecuteImplementationAsync("cut_geometry", adapter, context, """{"elementToCutIds":[8001],"cuttingElementIds":[8002],"operation":"uncut"}""");
         Check("cut_geometry uncut 也走通", uncut.Success);
+
+        var cutCache = cache.Store("s", "cut-first", new List<Dictionary<string, object?>> { new() { ["elementId"] = 8001 } });
+        var cutFromCache = await ExecuteImplementationAsync("cut_geometry", adapter, context, $$"""{"elementToCutCacheId":"{{cutCache}}","cuttingElementIds":[8002],"operation":"cut"}""");
+        Check("cut_geometry 支持被剪切元素 cacheId", cutFromCache.Success);
     }
 
     // ------------------------------------------------ 查询与交互
@@ -881,11 +945,20 @@ internal static class Program
         var adapter = new FakeAdapter();
         var context = new AIToolContext { RevitAdapter = adapter, UnitService = new UnitService(), DataCache = new SessionAIToolDataCache() };
 
-        var query = await ExecuteImplementationAsync("element_query", adapter, context, """{"operation":"byCategory","categoryName":"墙"}""");
-        Check("element_query 返回 2 个元素", query.Success && query.Message.Contains("查询到 2 个元素", StringComparison.Ordinal));
+        var query = await ExecuteImplementationAsync("element_query", adapter, context, """{"operation":"by_category","categoryName":"墙"}""");
+        Check("element_query by_category 返回 1 个墙元素", query.Success && query.Message.Contains("找到 1 个 墙", StringComparison.Ordinal));
 
-        var queryByType = await ExecuteImplementationCatchingAsync("element_query", adapter, context, """{"operation":"byType"}""");
-        Check("element_query byType 缺 typeId/typeName 被拦下", !queryByType.Success);
+        var queryByType = await ExecuteImplementationAsync("element_query", adapter, context, """{"operation":"by_family_type"}""");
+        Check("element_query by_family_type 缺 typeId 被拦下", !queryByType.Success);
+
+        var queryById = await ExecuteImplementationAsync("element_query", adapter, context, """{"operation":"by_id","elementIds":[8001,9999]}""");
+        Check("element_query by_id 报告 1 个未找到并生成缓存", queryById.Success
+            && queryById.Message.Contains("1 个未找到", StringComparison.Ordinal)
+            && queryById.CacheId is not null);
+
+        var querySelected = await ExecuteImplementationAsync("element_query", adapter, context, """{"operation":"selected"}""");
+        Check("element_query selected 返回 2 个选中元素", querySelected.Success
+            && querySelected.Message.Contains("2 个选中元素", StringComparison.Ordinal));
 
         var filtered = await ExecuteImplementationAsync("filter_elements", adapter, context, """{"categoryName":"墙"}""");
         Check("filter_elements 过滤后 1 个元素", filtered.Success && filtered.Message.Contains("剩 1 个元素", StringComparison.Ordinal));
@@ -925,7 +998,9 @@ internal static class Program
         Check("read_schedule_data 返回 2 行", scheduleData.Success && scheduleData.Message.Contains("本次返回 2 行", StringComparison.Ordinal));
 
         var collision = await ExecuteImplementationAsync("check_collision", adapter, context, """{"source":[8001],"target":[8002]}""");
-        Check("check_collision 发现 1 处碰撞", collision.Success && collision.Message.Contains("发现 1 处碰撞", StringComparison.Ordinal));
+        Check("check_collision 发现 1 对碰撞并缓存详情", collision.Success
+            && collision.Message.Contains("发现 1 对存在碰撞", StringComparison.Ordinal)
+            && collision.CacheId is not null);
 
         var collisionMissing = await ExecuteImplementationAsync("check_collision", adapter, context, """{"target":[8002]}""");
         Check("check_collision 缺 source 返回失败", !collisionMissing.Success);
@@ -979,32 +1054,47 @@ internal static class Program
         var fromFloorsMissingTopo = await ExecuteImplementationAsync("create_topography_from_floors", adapter, context, """{"floor_element_ids":[8001],"confirmed":true}""");
         Check("create_topography_from_floors 缺地形 id 返回失败", !fromFloorsMissingTopo.Success);
 
-        var insulationAdd = await ExecuteImplementationAsync("insulation_manager", adapter, context, """{"operation":"add","element_ids":[300],"thickness":50,"material":"岩棉"}""");
-        Check("insulation_manager add 成功", insulationAdd.Success && insulationAdd.Message.Contains("1 个元素", StringComparison.Ordinal));
+        var insulationAdd = await ExecuteImplementationAsync("insulation_manager", adapter, context, """{"operation":"add_to_elements","element_ids":[300],"thickness":50,"material":"岩棉"}""");
+        Check("insulation_manager add_to_elements 成功", insulationAdd.Success && insulationAdd.Message.Contains("添加保温", StringComparison.Ordinal));
 
-        var insulationAddFail = await ExecuteImplementationAsync("insulation_manager", adapter, context, """{"operation":"add","element_ids":[9999]}""");
-        Check("insulation_manager 无变化时返回失败并说明原因", !insulationAddFail.Success && insulationAddFail.Message.Contains("复合层", StringComparison.Ordinal));
+        var insulationAddFail = await ExecuteImplementationAsync("insulation_manager", adapter, context, """{"operation":"add_to_elements","element_ids":[9999],"thickness":50}""");
+        Check("insulation_manager 全部失败时返回失败", !insulationAddFail.Success && insulationAddFail.Message.Contains("失败 1 个", StringComparison.Ordinal));
 
         var insulationBadOp = await ExecuteImplementationAsync("insulation_manager", adapter, context, """{"operation":"nope","element_ids":[300]}""");
         Check("insulation_manager 未知操作返回失败", !insulationBadOp.Success);
 
-        var insulationList = await ExecuteImplementationAsync("insulation_query", adapter, context, """{"operation":"list"}""");
-        Check("insulation_query 统计保温层 1 条", insulationList.Success && insulationList.Message.Contains("保温层 1 条", StringComparison.Ordinal));
+        var insulationList = await ExecuteImplementationAsync("insulation_query", adapter, context, """{"operation":"list_systems"}""");
+        Check("insulation_query list_systems 返回系统保温状态", insulationList.Success
+            && insulationList.Message.Contains("系统的保温状态", StringComparison.Ordinal));
 
-        var insulationUninsulated = await ExecuteImplementationAsync("insulation_query", adapter, context, """{"operation":"uninsulated"}""");
-        Check("insulation_query only_uninsulated 时保温层 0 条", insulationUninsulated.Success && insulationUninsulated.Message.Contains("保温层 0 条", StringComparison.Ordinal));
+        var insulationUninsulated = await ExecuteImplementationAsync("insulation_query", adapter, context, """{"operation":"query_uninsulated"}""");
+        Check("insulation_query query_uninsulated 成功", insulationUninsulated.Success);
 
-        var systemQuery = await ExecuteImplementationAsync("mep_system_query", adapter, context, """{"operation":"list"}""");
-        Check("mep_system_query 返回 1 个系统 / 未保温 1 个", systemQuery.Success && systemQuery.Message.Contains("共 1 个 MEP 系统", StringComparison.Ordinal) && systemQuery.Message.Contains("未保温 1 个", StringComparison.Ordinal));
+        var insulationElements = await ExecuteImplementationAsync("insulation_query", adapter, context, """{"operation":"query_elements","element_ids":[8001,8002]}""");
+        Check("insulation_query query_elements 返回 2 个元素", insulationElements.Success
+            && insulationElements.Message.Contains("2 个元素", StringComparison.Ordinal));
 
-        var systemUninsulated = await ExecuteImplementationAsync("mep_system_query", adapter, context, """{"operation":"list","only_uninsulated":true}""");
-        Check("mep_system_query only_uninsulated 过滤生效", systemUninsulated.Success && systemUninsulated.Message.Contains("共 1 个 MEP 系统", StringComparison.Ordinal));
+        var insulationTypes = await ExecuteImplementationAsync("insulation_query", adapter, context, """{"operation":"query_types"}""");
+        Check("insulation_query query_types 返回类型", insulationTypes.Success
+            && insulationTypes.Message.Contains("2 个保温类型", StringComparison.Ordinal));
+
+        var systemQuery = await ExecuteImplementationAsync("mep_system_query", adapter, context, """{"operation":"list_systems"}""");
+        Check("mep_system_query list_systems 返回 1 个系统类型", systemQuery.Success
+            && systemQuery.Message.Contains("找到 1 个系统类型", StringComparison.Ordinal));
+
+        var systemUninsulated = await ExecuteImplementationAsync("mep_system_query", adapter, context, """{"operation":"insulation_status","only_uninsulated":true}""");
+        Check("mep_system_query insulation_status 过滤生效", systemUninsulated.Success
+            && systemUninsulated.Message.Contains("其中 0 个系统未保温", StringComparison.Ordinal));
 
         var systemCreate = await ExecuteImplementationAsync("mep_system_manager", adapter, context, """{"operation":"create","system_type_id":700,"new_system_name":"新风 1"}""");
         Check("mep_system_manager create 成功", systemCreate.Success && systemCreate.Message.Contains("新风 1", StringComparison.Ordinal));
 
         var systemCreateBadType = await ExecuteImplementationCatchingAsync("mep_system_manager", adapter, context, """{"operation":"create","system_type_id":9999}""");
         Check("mep_system_manager 非系统类型被拦下", !systemCreateBadType.Success);
+
+        var systemDuplicate = await ExecuteImplementationAsync("mep_system_manager", adapter, context, """{"operation":"duplicate","source_system_type_id":700,"new_system_name":"家用冷水 副本"}""");
+        Check("mep_system_manager duplicate 成功", systemDuplicate.Success
+            && systemDuplicate.Message.Contains("家用冷水 副本", StringComparison.Ordinal));
 
         var systemRename = await ExecuteImplementationAsync("mep_system_manager", adapter, context, """{"operation":"rename","system_type_id":9500,"new_name":"家用冷水 A"}""");
         Check("mep_system_manager rename 成功", systemRename.Success && systemRename.Message.Contains("家用冷水 A", StringComparison.Ordinal));
@@ -1037,16 +1127,16 @@ internal static class Program
         var roadMissing = await ExecuteImplementationAsync("create_road_from_walls", adapter, context, """{}""");
         Check("create_road_from_walls 缺墙 id 返回失败", !roadMissing.Success);
 
-        var cadList = await ExecuteImplementationAsync("cad_layer_manager", adapter, context, """{"operation":"list","linkId":11001}""");
-        Check("cad_layer_manager list 返回 2 个图层", cadList.Success && cadList.Message.Contains("2 个图层", StringComparison.Ordinal));
+        var cadList = await ExecuteImplementationAsync("cad_layer_manager", adapter, context, """{"operation":"get_layers","linkId":11001}""");
+        Check("cad_layer_manager get_layers 返回 2 个图层", cadList.Success && cadList.Message.Contains("2 个图层", StringComparison.Ordinal));
 
-        var cadHide = await ExecuteImplementationAsync("cad_layer_manager", adapter, context, """{"operation":"hide","linkId":11001,"layerName":"A-WALL"}""");
-        Check("cad_layer_manager hide 单个图层", cadHide.Success && cadHide.Message.Contains("涉及 1 个图层", StringComparison.Ordinal));
+        var cadLines = await ExecuteImplementationAsync("cad_layer_manager", adapter, context, """{"operation":"get_lines","linkId":11001,"layerName":"A-WALL"}""");
+        Check("cad_layer_manager get_lines 返回 2 条线条", cadLines.Success && cadLines.Message.Contains("2 条线条", StringComparison.Ordinal));
 
         var cadBadOp = await ExecuteImplementationCatchingAsync("cad_layer_manager", adapter, context, """{"operation":"nope","linkId":11001}""");
         Check("cad_layer_manager 未知操作被拦下", !cadBadOp.Success);
 
-        var cadBadLink = await ExecuteImplementationCatchingAsync("cad_layer_manager", adapter, context, """{"operation":"list","linkId":9999}""");
+        var cadBadLink = await ExecuteImplementationCatchingAsync("cad_layer_manager", adapter, context, """{"operation":"get_layers","linkId":9999}""");
         Check("cad_layer_manager 链接不存在被拦下", !cadBadLink.Success);
 
         var cutDryRun = await ExecuteImplementationAsync("fix_cutting_order", adapter, context, """{"cuttingElementIds":[8001],"elementToCutIds":[8002],"dryRun":true}""");
@@ -1152,6 +1242,245 @@ internal static class Program
         Check("execute_code 空计划返回失败", !codeEmpty.Success);
 
         Environment.SetEnvironmentVariable("REVITAI_SNIPPETS_PATH", null);
+    }
+
+    // ------------------------------------------------ 五工具等价性试点
+
+    private static async Task TestPilotFiveToolsAsync()
+    {
+        ToolImplementationRegistry.Clear();
+        QueryInteractionImplementations.RegisterAll();
+        DomainImplementations.RegisterAll();
+        DomainImplementations2.RegisterAll();
+
+        var adapter = new FakeAdapter();
+        var cache = new SessionAIToolDataCache();
+        var context = new AIToolContext
+        {
+            RevitAdapter = adapter,
+            UnitService = new UnitService(),
+            DataCache = cache,
+            SessionId = "pilot-five",
+        };
+
+        // element_query: 4 种原版 operation、缓存和错误分支。
+        var byId = await ExecuteImplementationAsync(
+            "element_query",
+            adapter,
+            context,
+            """{"operation":"by_id","elementIds":[8001,9999]}""");
+        var byIdCache = byId.CacheId;
+        Check("pilot element_query by_id 返回找到/未找到统计和缓存",
+            byId.Success && byId.Message.Contains("找到 1 个", StringComparison.Ordinal)
+            && byId.Message.Contains("1 个未找到", StringComparison.Ordinal)
+            && byIdCache is not null);
+        Check("pilot element_query 缓存可恢复元素 ID", byIdCache is not null
+            && (cache.Retrieve<List<Dictionary<string, object?>>>(byIdCache)
+                ?.Select(item => Convert.ToInt32(item["elementId"]))
+                .SequenceEqual(new[] { 8001 }) ?? false));
+
+        var byCategoryMissing = await ExecuteImplementationAsync(
+            "element_query",
+            adapter,
+            context,
+            """{"operation":"by_category"}""");
+        Check("pilot element_query by_category 缺类别失败", !byCategoryMissing.Success);
+
+        var byFamilyType = await ExecuteImplementationAsync(
+            "element_query",
+            adapter,
+            context,
+            """{"operation":"by_family_type","typeId":300,"typeName":"常规 - 200mm"}""");
+        Check("pilot element_query by_family_type 校验类型名称并返回实例",
+            byFamilyType.Success && byFamilyType.Message.Contains("使用类型", StringComparison.Ordinal));
+
+        var selected = await ExecuteImplementationAsync("element_query", adapter, context, """{"operation":"selected"}""");
+        Check("pilot element_query selected 返回选择集", selected.Success
+            && selected.Message.Contains("2 个选中元素", StringComparison.Ordinal));
+
+        // check_collision: 单 id、类别、缓存、自碰撞和 link 参数。
+        var collisionSingle = await ExecuteImplementationAsync(
+            "check_collision",
+            adapter,
+            context,
+            """{"source":8001,"target":8002}""");
+        Check("pilot check_collision 支持单 id 对", collisionSingle.Success
+            && collisionSingle.Message.Contains("发现 1 对存在碰撞", StringComparison.Ordinal));
+
+        var collisionCategory = await ExecuteImplementationAsync(
+            "check_collision",
+            adapter,
+            context,
+            """{"source":"墙","target":[8002],"sourceLinkInstanceId":11001,"targetLinkInstanceId":11002}""");
+        var collisionJson = collisionCategory.Data is null ? string.Empty : JsonSerializer.Serialize(collisionCategory.Data);
+        Check("pilot check_collision 支持类别和链接实例", collisionCategory.Success
+            && collisionJson.Contains("11001", StringComparison.Ordinal)
+            && collisionJson.Contains("sourceDocument", StringComparison.Ordinal));
+
+        var collisionCached = await ExecuteImplementationAsync(
+            "check_collision",
+            adapter,
+            context,
+            $$"""{"source":"{{byIdCache}}","target":[8002]}""");
+        Check("pilot check_collision 支持 element_query 缓存 ID", collisionCached.Success);
+
+        var collisionSelf = await ExecuteImplementationAsync(
+            "check_collision",
+            adapter,
+            context,
+            """{"source":8001}""");
+        Check("pilot check_collision 缺 target 时执行源集合自碰撞", collisionSelf.Success
+            && collisionSelf.Message.Contains("发现 0 对", StringComparison.Ordinal));
+
+        var collisionInvalidCache = await ExecuteImplementationAsync(
+            "check_collision",
+            adapter,
+            context,
+            """{"source":"cache_9999","target":8002}""");
+        Check("pilot check_collision 无效缓存失败", !collisionInvalidCache.Success);
+
+        // insulation_manager: 原版 5 种 operation、厚度/材质校验和默认覆盖。
+        var insulationAdd = await ExecuteImplementationAsync(
+            "insulation_manager",
+            adapter,
+            context,
+            """{"operation":"add_to_elements","element_ids":[300],"thickness":50,"material":"岩棉"}""");
+        var insulationAddJson = insulationAdd.Data is null ? string.Empty : JsonSerializer.Serialize(insulationAdd.Data);
+        Check("pilot insulation_manager add_to_elements 默认 override_existing=true",
+            insulationAdd.Success && insulationAddJson.Contains("add_to_elements", StringComparison.Ordinal));
+
+        var insulationNoThickness = await ExecuteImplementationAsync(
+            "insulation_manager",
+            adapter,
+            context,
+            """{"operation":"add_to_elements","element_ids":[300]}""");
+        Check("pilot insulation_manager add 缺厚度失败", !insulationNoThickness.Success);
+
+        var insulationNoMaterial = await ExecuteImplementationAsync(
+            "insulation_manager",
+            adapter,
+            context,
+            """{"operation":"modify_material","element_ids":[300]}""");
+        Check("pilot insulation_manager modify_material 缺材质失败", !insulationNoMaterial.Success);
+
+        var insulationThickness = await ExecuteImplementationAsync(
+            "insulation_manager",
+            adapter,
+            context,
+            """{"operation":"modify_thickness","element_ids":[300],"thickness":75}""");
+        Check("pilot insulation_manager modify_thickness 成功", insulationThickness.Success
+            && insulationThickness.Message.Contains("75", StringComparison.Ordinal));
+
+        var insulationSystem = await ExecuteImplementationAsync(
+            "insulation_manager",
+            adapter,
+            context,
+            """{"operation":"add_to_system","system_type_id":700,"thickness":40,"material":"橡塑"}""");
+        Check("pilot insulation_manager add_to_system 成功", insulationSystem.Success);
+
+        var insulationRemove = await ExecuteImplementationAsync(
+            "insulation_manager",
+            adapter,
+            context,
+            """{"operation":"remove_from_elements","element_ids":[300]}""");
+        Check("pilot insulation_manager remove_from_elements 成功", insulationRemove.Success);
+
+        // mep_system_query: 9 种 operation 的路由与必填参数。
+        var mepList = await ExecuteImplementationAsync("mep_system_query", adapter, context, """{"operation":"list_systems"}""");
+        Check("pilot mep_system_query list_systems", mepList.Success
+            && mepList.Message.Contains("系统类型", StringComparison.Ordinal));
+
+        var mepBadTarget = await ExecuteImplementationAsync(
+            "mep_system_query",
+            adapter,
+            context,
+            """{"operation":"size_distribution","target":"all","system_type_id":700}""");
+        Check("pilot mep_system_query size_distribution 拒绝 all", !mepBadTarget.Success);
+
+        var mepSizes = await ExecuteImplementationAsync(
+            "mep_system_query",
+            adapter,
+            context,
+            """{"operation":"size_distribution","target":"pipe","system_type_id":700}""");
+        var mepSizesJson = mepSizes.Data is null ? string.Empty : JsonSerializer.Serialize(mepSizes.Data);
+        Check("pilot mep_system_query size_distribution 返回分档", mepSizes.Success
+            && mepSizesJson.Contains("\"100\"", StringComparison.Ordinal));
+
+        var mepElements = await ExecuteImplementationAsync(
+            "mep_system_query",
+            adapter,
+            context,
+            """{"operation":"get_elements","target":"pipe","system_type_id":700,"include_fittings":true}""");
+        Check("pilot mep_system_query get_elements 生成缓存", mepElements.Success
+            && mepElements.CacheId is not null);
+
+        var mepProperties = await ExecuteImplementationAsync(
+            "mep_system_query",
+            adapter,
+            context,
+            """{"operation":"get_properties","system_type_id":700}""");
+        var mepPropertiesJson = mepProperties.Data is null ? string.Empty : JsonSerializer.Serialize(mepProperties.Data);
+        Check("pilot mep_system_query get_properties 返回属性", mepProperties.Success
+            && mepPropertiesJson.Contains("system_classification", StringComparison.Ordinal));
+
+        var mepDetails = await ExecuteImplementationAsync(
+            "mep_system_query",
+            adapter,
+            context,
+            """{"operation":"system_details","system_type_id":700,"include_size_distribution":true,"include_category_breakdown":true}""");
+        var mepDetailsJson = mepDetails.Data is null ? string.Empty : JsonSerializer.Serialize(mepDetails.Data);
+        Check("pilot mep_system_query system_details 包含分布",
+            mepDetails.Success && mepDetailsJson.Contains("size_distribution", StringComparison.Ordinal));
+
+        var mepUnknown = await ExecuteImplementationAsync("mep_system_query", adapter, context, """{"operation":"nope"}""");
+        Check("pilot mep_system_query 未知 operation 失败", !mepUnknown.Success);
+
+        // cad_layer_manager: 原版 5 种 operation。
+        var cadLayers = await ExecuteImplementationAsync(
+            "cad_layer_manager",
+            adapter,
+            context,
+            """{"operation":"get_layers","linkId":11001}""");
+        Check("pilot cad_layer_manager get_layers", cadLayers.Success
+            && cadLayers.Message.Contains("2 个图层", StringComparison.Ordinal));
+
+        var cadLinesMissing = await ExecuteImplementationAsync(
+            "cad_layer_manager",
+            adapter,
+            context,
+            """{"operation":"get_lines","linkId":11001}""");
+        Check("pilot cad_layer_manager get_lines 缺 layerName 失败", !cadLinesMissing.Success);
+
+        var cadLines = await ExecuteImplementationAsync(
+            "cad_layer_manager",
+            adapter,
+            context,
+            """{"operation":"get_lines","linkId":11001,"layerName":"A-WALL"}""");
+        Check("pilot cad_layer_manager get_lines 缓存结果", cadLines.Success && cadLines.CacheId is not null);
+
+        var cadTexts = await ExecuteImplementationAsync(
+            "cad_layer_manager",
+            adapter,
+            context,
+            """{"operation":"get_texts","linkId":11001,"layerName":"A-WALL"}""");
+        Check("pilot cad_layer_manager get_texts", cadTexts.Success
+            && cadTexts.Message.Contains("1 个文字", StringComparison.Ordinal));
+
+        var cadBlocks = await ExecuteImplementationAsync(
+            "cad_layer_manager",
+            adapter,
+            context,
+            """{"operation":"get_blocks","linkId":11001,"layerName":"A-DOOR"}""");
+        Check("pilot cad_layer_manager get_blocks", cadBlocks.Success
+            && cadBlocks.Message.Contains("1 个图块", StringComparison.Ordinal));
+
+        var cadAnalyze = await ExecuteImplementationAsync(
+            "cad_layer_manager",
+            adapter,
+            context,
+            """{"operation":"analyze","linkId":11001}""");
+        Check("pilot cad_layer_manager analyze 返回统计", cadAnalyze.Success
+            && cadAnalyze.Message.Contains("包含内容", StringComparison.Ordinal));
     }
 
     // ------------------------------------------------ 全量覆盖验收

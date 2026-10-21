@@ -23,7 +23,12 @@ public sealed record MePSpec(
     double? Height);
 
 /// <summary>按闭合轮廓创建的构件（楼板 / 足迹屋顶）。</summary>
-public sealed record ProfileSpec(IReadOnlyList<Point2> Points, int? LevelId, int? TypeId);
+public sealed record ProfileSpec(
+    IReadOnlyList<Point2> Points,
+    int? LevelId,
+    int? TypeId,
+    bool DefinesSlope = false,
+    double? SlopeAngle = null);
 
 public interface IMepModelingService
 {

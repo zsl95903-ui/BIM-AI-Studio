@@ -12,6 +12,11 @@ public sealed record MaterialInfo(
     int Transparency,
     bool IsPaint);
 
+public sealed record ElementMaterialInfo(
+    int ElementId,
+    bool Found,
+    IReadOnlyList<MaterialInfo> Materials);
+
 public sealed record CompoundLayerInfo(
     int Index,
     string Function,
@@ -31,7 +36,9 @@ public interface IMaterialService
 
     MaterialInfo? Update(object document, int? materialId, string? name, string? colorHex, int? transparency);
 
-    bool Delete(object document, int? materialId, string? name);
+    bool Delete(object document, int? materialId, string? name, bool force = false);
+
+    IReadOnlyList<ElementMaterialInfo> GetElementMaterials(object document, IReadOnlyList<int> elementIds);
 }
 
 public interface ICompoundStructureService

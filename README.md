@@ -30,7 +30,7 @@ BIM-AI Studio 把这些收敛成一层稳定的结构化工具契约：Agent 只
 | Bridge | `src/ReVitAI.Bridge` | 命名管道宿主 + 48 个稳定工具 + 事务调度 |
 | MCP Server | `src/RevitAi.McpServer` | 把实时的桥接工具目录暴露为 MCP tools |
 | Engine | `clean-room-tools` | 自研工具引擎：契约、注册表、宿主、服务层、冒烟测试 |
-| Toolset | `rebuilt-120-tools` | 120 个工具的源码（仅工具层：工具类 + 服务 + 契约） |
+| Toolset | `clean-room-tools` | 120 个工具的 Apache-2.0 源码；工具类由契约生成 |
 | Workbench | `worktree` | 混合工作台：WebView2 UI、PDF Worker、Codex 桥、打包脚本 |
 | Agent Skill | `agent/revit-2027` | Codex 技能包：调用脚本、建模配方、实时目录 |
 
@@ -60,13 +60,16 @@ Codex / MCP client / script
 ## 快速开始
 
 ```powershell
-# 1. 构建
+# 1. 构建并测试 120 工具集
+powershell -ExecutionPolicy Bypass -File .\clean-room-tools\build.ps1
+
+# 2. 构建 Bridge 与 MCP
 powershell -ExecutionPolicy Bypass -File .\build\build.ps1
 
-# 2. 打包
+# 3. 打包 Bridge
 powershell -ExecutionPolicy Bypass -File .\build\package.ps1
 
-# 3. 安装（关闭 Revit 后执行，产物在 artifacts\）
+# 4. 安装（关闭 Revit 后执行，产物在 artifacts\）
 powershell -ExecutionPolicy Bypass -File .\installer\install.ps1
 ```
 
@@ -101,7 +104,7 @@ Agent 工作流（读上下文 → 解析 ID → dry-run → 写入 → 读回�
 | 层 | 数量 | 说明 |
 | --- | ---: | --- |
 | Bridge 稳定工具 | 48 | [docs/tool-catalog.json](docs/tool-catalog.json)，随 Bridge 发布 |
-| 完整工具集 | 120 | `rebuilt-120-tools/`，覆盖建筑、结构、MEP、注释、视图、导出 |
+| 完整工具集 | 120 | `clean-room-tools/`，覆盖建筑、结构、MEP、注释、视图、导出 |
 | 运行时目录 | 119 | 由已安装插件实时返回，以 `tools list` 为准 |
 
 工具数量以**运行时返回**为准，文档里的数字只用于说明规模。新增工具请看 [工具编写指南](docs/tool-authoring-guide.md)。
@@ -116,7 +119,7 @@ Agent 工作流（读上下文 → 解析 ID → dry-run → 写入 → 读回�
 
 完整写法（含墙/板/详图线/文字/尺寸五类模板、批量参数、读回校验、检查清单）见 [docs/tool-authoring-guide.md](docs/tool-authoring-guide.md)。
 
-`rebuilt-120-tools/` 里只保留工具层（`RevitAi.Abstractions` / `RevitAi.Core` / `RevitAi.Revit` 三个项目），用于对照现有 120 个工具的写法；界面、账号、计费、更新等业务模块不在开源范围内。
+`clean-room-tools/` 是唯一工具层源码。120 个工具类在构建时由 `contracts/tool-contracts.json` 生成，业务实现位于 `ExtToolLib.Implementations`、`RevitAi.Engine.Revit` 和对应服务层。界面、账号、计费、更新等业务模块不在开源范围内。
 
 ## 兼容性
 
@@ -139,7 +142,7 @@ Agent 工作流（读上下文 → 解析 ID → dry-run → 写入 → 读回�
 - 用户模型、日志、会话与个人设置；
 - 第三方安装包、原始程序集与处理中间产物。
 
-`rebuilt-120-tools/` 为衍生作品，**不自动适用**本仓库的 Apache-2.0；再分发前请自行评估上游许可。详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+`clean-room-tools/` 为本项目维护的干净重建实现，代码采用 Apache-2.0。唯一新增第三方运行时依赖为 MIT 许可的 `ACadSharp 3.4.9`，详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 ## 文档
 
@@ -148,6 +151,7 @@ Agent 工作流（读上下文 → 解析 ID → dry-run → 写入 → 读回�
 | [technical-overview.md](docs/technical-overview.md) | 技术说明：架构、模型调用工具链路、可扩展性 |
 | [development-guide.md](docs/development-guide.md) | 开发说明：问题定义、能力域、扩展机制、底层契约 |
 | [architecture.md](docs/architecture.md) | 四层架构与调用链 |
+| [clean-room-rebuild.md](docs/clean-room-rebuild.md) | 120 工具干净重建、测试与发布边界 |
 | [bridge-protocol.md](docs/bridge-protocol.md) | 管道、请求/响应、错误码、串行化 |
 | [tool-authoring-guide.md](docs/tool-authoring-guide.md) | 新工具从 schema 到读回的完整写法 |
 | [modeling-recipes.md](docs/modeling-recipes.md) | 标高 → 轴网 → 墙 → 房间 → 注释 |
@@ -161,4 +165,4 @@ Agent 工作流（读上下文 → 解析 ID → dry-run → 写入 → 读回�
 
 ## 许可
 
-自有代码采用 [Apache-2.0](LICENSE)。第三方组件与衍生代码见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+项目自有代码、120 工具集、契约、测试和构建脚本采用 [Apache-2.0](LICENSE)。第三方组件见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

@@ -278,7 +278,34 @@ internal sealed class ViewCreationService : IViewCreationService
         return (int)sheet.Id.Value;
     }
 
-    public int CreateTextNote(object document, string text, double xMm, double yMm, int? viewId)
+    public int PlaceViewOnSheet(object document, int sheetId, int viewId, double xMm, double yMm)
+    {
+        if (document is not Document doc)
+        {
+            throw new InvalidOperationException("文档对象无效。");
+        }
+
+        var sheet = doc.GetElement(new ElementId(sheetId)) as ViewSheet
+                    ?? throw new InvalidOperationException($"未找到图纸 {sheetId}。");
+        var view = doc.GetElement(new ElementId(viewId)) as View
+                   ?? throw new InvalidOperationException($"未找到视图 {viewId}。");
+
+        var viewport = Viewport.Create(
+            doc,
+            sheet.Id,
+            view.Id,
+            new XYZ(ViewWriteService.MmToFeet(xMm), ViewWriteService.MmToFeet(yMm), 0));
+        return (int)viewport.Id.Value;
+    }
+
+    public int CreateTextNote(
+        object document,
+        string text,
+        double xMm,
+        double yMm,
+        int? viewId,
+        int? textTypeId = null,
+        bool leader = false)
     {
         var (doc, view) = ViewWriteService.RequireView(document, viewId);
         if (string.IsNullOrWhiteSpace(text))
@@ -286,10 +313,17 @@ internal sealed class ViewCreationService : IViewCreationService
             throw new InvalidOperationException("必须提供 text（文字内容）。");
         }
 
-        var typeId = doc.GetDefaultElementTypeId(ElementTypeGroup.TextNoteType);
+        var typeId = textTypeId is not null
+            ? new ElementId(textTypeId.Value)
+            : doc.GetDefaultElementTypeId(ElementTypeGroup.TextNoteType);
         var position = new XYZ(ViewWriteService.MmToFeet(xMm), ViewWriteService.MmToFeet(yMm), 0);
 
         var note = TextNote.Create(doc, view.Id, position, text, typeId);
+        if (leader)
+        {
+            note.AddLeader(TextNoteLeaderTypes.TNLT_STRAIGHT_L);
+        }
+
         return (int)note.Id.Value;
     }
 
@@ -326,7 +360,8 @@ internal sealed class FilterService : IFilterService
         int red,
         int green,
         int blue,
-        bool visible)
+        bool visible,
+        int? patternId = null)
     {
         var (doc, view) = ViewWriteService.RequireView(document, viewId);
         if (string.IsNullOrWhiteSpace(filterName))
@@ -372,6 +407,14 @@ internal sealed class FilterService : IFilterService
                 var color = new Color(Clamp(red), Clamp(green), Clamp(blue));
                 overrides.SetProjectionLineColor(color);
                 overrides.SetCutLineColor(color);
+                if (patternId is not null && doc.GetElement(new ElementId(patternId.Value)) is FillPatternElement fillPattern)
+                {
+                    overrides.SetSurfaceForegroundPatternId(fillPattern.Id);
+                    overrides.SetCutForegroundPatternId(fillPattern.Id);
+                    overrides.SetSurfaceForegroundPatternColor(color);
+                    overrides.SetCutForegroundPatternColor(color);
+                }
+
                 view.SetFilterOverrides(filter.Id, overrides);
                 view.SetFilterVisibility(filter.Id, visible);
                 return (int)filter.Id.Value;

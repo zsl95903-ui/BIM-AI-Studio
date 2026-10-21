@@ -77,7 +77,7 @@ public static class ToolArgumentReader
                 break;
             }
 
-            if (item.TryGetValue("id", out var raw) && raw is not null)
+            if ((item.TryGetValue("id", out var raw) || item.TryGetValue("elementId", out raw)) && raw is not null)
             {
                 result.Add((int)ToDouble(raw));
             }

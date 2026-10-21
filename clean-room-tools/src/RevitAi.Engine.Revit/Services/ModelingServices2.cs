@@ -232,7 +232,23 @@ internal sealed class ShapeModelingService : IShapeModelingService
                     curveArray.Append(curve);
                 }
 
-                var created = doc.Create.NewFootPrintRoof(curveArray, level, roofType, out _);
+                var created = doc.Create.NewFootPrintRoof(curveArray, level, roofType, out var modelCurves);
+                foreach (ModelCurve edge in modelCurves)
+                {
+                    try
+                    {
+                        created.set_DefinesSlope(edge, roof.DefinesSlope);
+                        if (roof.DefinesSlope && roof.SlopeAngle is not null)
+                        {
+                            created.set_SlopeAngle(edge, roof.SlopeAngle.Value * Math.PI / 180.0);
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        // 个别边不支持坡度设置。
+                    }
+                }
+
                 createdIds.Add((int)created.Id.Value);
             }
             catch (Exception ex)

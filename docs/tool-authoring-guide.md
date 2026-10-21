@@ -1,7 +1,7 @@
 # 工具编写指南（Tool Authoring Guide）
 
-> 依据：本仓库的 `rebuilt-120-tools/`、`clean-room-tools/`，以及 `agent/revit-2027/` 中的桥接契约。
-> 本文的模板来自本仓库的工具层（`rebuilt-120-tools/`），可直接作为新工具的实现基线。
+> 依据：本仓库的 `clean-room-tools/` 以及 `agent/revit-2027/` 中的桥接契约。
+> 本文的模板来自 Apache-2.0 的 clean-room 工具层，可直接作为新工具的实现基线。
 
 ---
 
@@ -727,13 +727,13 @@ public sealed class AIToolResult
 
 | 内容 | 路径 |
 | --- | --- |
-| 工具接口与特性 | `rebuilt-120-tools/RevitAi.Abstractions/RevitAi.Abstractions.AI/` |
+| 工具接口与特性 | `clean-room-tools/src/RevitAi.Engine.Abstractions/` |
 | 工具上下文/结果 | 同上：`AIToolContext.cs`、`AIToolResult.cs`、`IAIToolRegistry.cs` |
 | 反射注册表 | `clean-room-tools/src/RevitAi.Engine.Core/AIToolRegistry.cs` |
 | 事务宿主 | `clean-room-tools/src/RevitAi.Engine.Revit/RevitToolHost.cs` |
 | 调度与结果判定 | `clean-room-tools/src/RevitAi.Engine.Core/AIToolInvocationHandler.cs` |
-| 墙/板/门窗实现 | `rebuilt-120-tools/RevitAi.Revit/RevitAi.Revit.Services/ElementService.cs` |
-| 文字/标记/尺寸实现 | `rebuilt-120-tools/RevitAi.Revit/RevitAi.Revit.Services/AnnotationService.cs` |
+| 墙/板/门窗实现 | `clean-room-tools/src/RevitAi.Engine.Revit/Services/ElementAndModificationServices.cs` |
+| 文字/标记/尺寸实现 | `clean-room-tools/src/RevitAi.Engine.Revit/Services/WriteServices.cs` |
 | 120 工具批量实现 | `clean-room-tools/src/RevitToolSet.Implementations/` |
 | 生成器 | `clean-room-tools/tools/ToolSetGenerator/Program.cs` |
 | 桥接协议 | `docs/bridge-protocol.md` |

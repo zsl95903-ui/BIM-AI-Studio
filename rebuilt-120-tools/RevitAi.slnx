@@ -1,9 +1,0 @@
-<Solution>
-  <Project Path="RevitAi.Abstractions/RevitAi.Abstractions.csproj" />
-  <Project Path="RevitAi.Core/RevitAi.Core.csproj">
-    <Platform Project="x64" />
-  </Project>
-  <Project Path="RevitAi.Revit/RevitAi.Revit.csproj">
-    <Platform Project="x64" />
-  </Project>
-</Solution>

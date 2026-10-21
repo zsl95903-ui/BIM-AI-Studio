@@ -75,6 +75,19 @@ internal sealed class CreateRoadFromWallsImplementation : IToolImplementation
             OptionalDouble(context, "lane_width_meters", "laneWidthMeters"),
             OptionalDouble(context, "sidewalk_width_meters", "sidewalkWidthMeters"),
             OptionalDouble(context, "default_road_width_meters", "defaultRoadWidthMeters"));
+        var options = new
+        {
+            intersectionRadiusMeters = WriteArgs.Number(context, 10, "intersection_radius_meters", "intersectionRadiusMeters"),
+            sidewalk = ReadOptionMap(context, "sidewalk_options", "sidewalkOptions"),
+            curb = ReadOptionMap(context, "curb_options", "curbOptions"),
+            marking = ReadOptionMap(context, "marking_options", "markingOptions"),
+            advanced = ReadOptionMap(context, "advanced_options", "advancedOptions"),
+        };
+        var notes = result.Notes.Concat(new[]
+        {
+            "道路主体生成路面板；人行道、路缘、标线和场地外扩参数已解析并回传，"
+            + "实际构造需项目族/SiteSubRegion/ModelCurve 样板进一步启用。",
+        }).ToArray();
 
         return Task.FromResult(AIToolResult.Ok(
             $"✅ 已按 {result.WallCount} 面墙生成路面板 {result.FloorId}（轮廓 {result.Outline.Count} 点，{(result.ClosedLoop ? "闭合环" : "包围盒")}）",
@@ -85,7 +98,8 @@ internal sealed class CreateRoadFromWallsImplementation : IToolImplementation
                 closedLoop = result.ClosedLoop,
                 outline = result.Outline.Select(point => new { x = point.X, y = point.Y }).ToArray(),
                 unit = "millimeters",
-                notes = result.Notes,
+                options,
+                notes,
             }));
     }
 
@@ -101,6 +115,19 @@ internal sealed class CreateRoadFromWallsImplementation : IToolImplementation
 
         return null;
     }
+
+    private static IReadOnlyDictionary<string, object?> ReadOptionMap(AIToolContext context, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (context.Parameters.TryGetValue(key, out var value) && value is Dictionary<string, object?> map)
+            {
+                return new Dictionary<string, object?>(map, StringComparer.OrdinalIgnoreCase);
+            }
+        }
+
+        return new Dictionary<string, object?>();
+    }
 }
 
 // 结构分析对照：Revit\AS\Tools\Revit\Net8\AI\Tools\CadLayerManagerTool.cs（CAD）
@@ -111,25 +138,116 @@ internal sealed class CadLayerManagerImplementation : IToolImplementation
         var service = adapter.DomainExtraService ?? throw new InvalidOperationException("无法获取 DomainExtraService");
         var document = UiArgs.RequireDocument(adapter, context);
 
-        var operation = WriteArgs.Text(context, "operation");
+        var operationText = WriteArgs.Text(context, "operation");
         var linkId = WriteArgs.OptionalInt(context, "linkId", "link_id");
-        if (string.IsNullOrWhiteSpace(operation) || linkId is null)
+        if (string.IsNullOrWhiteSpace(operationText))
         {
-            return Task.FromResult(AIToolResult.Fail("必须提供 operation 与 linkId。"));
+            return Task.FromResult(AIToolResult.Fail("必须指定 operation 参数"));
         }
 
-        var viewId = WriteArgs.OptionalInt(context, "viewId", "view_id", "view_id") ?? 0;
-        var layers = service.ManageCadLayers(document, viewId, linkId.Value, operation!, WriteArgs.Text(context, "layerName", "layer_name"));
+        if (linkId is null or <= 0)
+        {
+            return Task.FromResult(AIToolResult.Fail("必须指定有效的 linkId"));
+        }
 
-        return Task.FromResult(AIToolResult.Ok(
-            $"✅ CAD 图层操作 {operation}：涉及 {layers.Count} 个图层",
-            new
+        var operation = operationText.Trim().ToLowerInvariant();
+        if (operation is not ("get_layers" or "get_lines" or "get_texts" or "get_blocks" or "analyze"))
+        {
+            return Task.FromResult(AIToolResult.Fail("不支持的操作类型: " + operationText));
+        }
+
+        var layerName = WriteArgs.Text(context, "layerName", "layer_name");
+        if (operation is "get_lines" or "get_texts" or "get_blocks" && string.IsNullOrWhiteSpace(layerName))
+        {
+            return Task.FromResult(AIToolResult.Fail($"{operation} 操作需要指定 layerName 参数"));
+        }
+
+        var result = service.QueryCad(document, linkId.Value, operation, layerName);
+        var finalData = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["operation"] = operation,
+            ["linkId"] = linkId.Value,
+            ["source"] = result.Source,
+        };
+
+        switch (operation)
+        {
+            case "get_layers":
+                finalData["count"] = result.Layers.Count;
+                finalData["layers"] = result.Layers;
+                break;
+            case "get_lines":
+                finalData["layerName"] = layerName;
+                finalData["count"] = result.Lines.Count;
+                finalData["lines"] = result.Lines;
+                break;
+            case "get_texts":
+                finalData["layerName"] = layerName;
+                finalData["count"] = result.Texts.Count;
+                finalData["texts"] = result.Texts;
+                break;
+            case "get_blocks":
+                finalData["layerName"] = layerName;
+                finalData["count"] = result.Blocks.Count;
+                finalData["blocks"] = result.Blocks;
+                break;
+            default:
+                finalData["statistics"] = new
+                {
+                    totalLayers = result.LayerCount,
+                    nonEmptyLayers = result.NonEmptyLayerCount,
+                    emptyLayers = result.LayerCount - result.NonEmptyLayerCount,
+                    totalBlocks = result.Analysis.Sum(layer => layer.BlockCount),
+                    totalLines = result.Analysis.Sum(layer => layer.LineCount),
+                    totalTexts = result.Analysis.Sum(layer => layer.TextCount),
+                };
+                finalData["layers"] = result.Analysis;
+                break;
+        }
+
+        if (!string.IsNullOrWhiteSpace(result.Message) && result.Message.Contains("无法", StringComparison.Ordinal))
+        {
+            return Task.FromResult(AIToolResult.Fail(result.Message, finalData));
+        }
+
+        var count = operation switch
+        {
+            "get_layers" => result.Layers.Count,
+            "get_lines" => result.Lines.Count,
+            "get_texts" => result.Texts.Count,
+            "get_blocks" => result.Blocks.Count,
+            _ => result.LayerCount,
+        };
+        var noun = operation switch
+        {
+            "get_layers" => "个图层",
+            "get_lines" => "条线条",
+            "get_texts" => "个文字",
+            "get_blocks" => "个图块",
+            _ => "个图层",
+        };
+        var message = operation == "analyze"
+            ? $"已分析 {result.LayerCount} 个图层，其中 {result.NonEmptyLayerCount} 个包含内容，"
+              + $"共识别 {result.Analysis.Sum(layer => layer.TotalCount)} 个对象"
+            : $"从{result.Source}获取到 {count} {noun}";
+
+        string? cacheId = null;
+        if (operation is "get_lines" or "get_texts" or "get_blocks" && context.DataCache is not null && count > 0)
+        {
+            object payload = operation switch
             {
-                operation,
-                linkId = linkId.Value,
-                count = layers.Count,
-                layers = layers.Select(layer => new { name = layer.Name, categoryId = layer.CategoryId, visible = layer.Visible }).ToArray(),
-            }));
+                "get_lines" => result.Lines,
+                "get_texts" => result.Texts,
+                _ => result.Blocks,
+            };
+            cacheId = context.DataCache.Store(context.SessionId ?? "default", $"cad_{operation}_{layerName}", payload);
+            message += $"\n\n💡 在后续工具调用中使用 cacheId=\"{cacheId}\" 参数来操作这些{noun}";
+            finalData["cache_id"] = cacheId;
+        }
+
+        return Task.FromResult(string.IsNullOrEmpty(cacheId)
+            ? AIToolResult.Ok(message, finalData)
+            : AIToolResult.OkWithCache(message, cacheId, finalData));
     }
 }
 

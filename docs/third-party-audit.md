@@ -10,17 +10,19 @@ Scope: BIM-AI Studio source tree and release packages.
 |---|---|---|---|
 | `src/ReVitAI.Bridge/ReVitAI.Bridge.csproj` | `RevitAPI.dll` | Autodesk proprietary | Build from local installation; do not redistribute |
 | `src/ReVitAI.Bridge/ReVitAI.Bridge.csproj` | `RevitAPIUI.dll` | Autodesk proprietary | Build from local installation; do not redistribute |
+| `clean-room-tools/src/RevitAi.Engine.Revit/RevitAi.Engine.Revit.csproj` | `ACadSharp` 3.4.9 | MIT | NuGet restore; package is not committed |
 | Project C# files | `System.*` | .NET runtime license | Used as platform libraries |
 | Project C# files | `Autodesk.Revit.*` | Autodesk proprietary API | Compile-time reference only |
 
 ## 2. Package Boundary
 
 - The source repository contains project-authored source, documentation, and build scripts.
-- `rebuilt-120-tools/` contains a tool-layer source set derived from a third-party Revit add-in; it is not covered by this repository's Apache-2.0 license.
-- UI, account, billing, entitlement and update modules were removed from that source set.
+- `clean-room-tools/` contains the Apache-2.0 120-tool source set, generated classes, tests and services.
+- Legacy decompiled source and original assemblies are not stored in the repository.
+- UI, account, billing, entitlement and update modules are not included.
 - The release package contains one project-authored assembly: `ReVitAI.Bridge.dll`.
 - Autodesk API binaries are not included.
-- No NuGet `PackageReference` is required.
+- `ReVitAI.Bridge` requires no NuGet `PackageReference`; `clean-room-tools` uses MIT-licensed `ACadSharp` 3.4.9.
 - No original third-party installer, compiled assembly or de-obfuscation intermediate is stored in the repository.
 
 ## 3. Release Checklist

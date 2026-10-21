@@ -30,13 +30,20 @@ internal static class ElementOpsArgs
 
     /// <summary>从 elementIds/elementId/cacheId 解析元素 id。</summary>
     public static List<int> ResolveIds(AIToolContext context, params string[] keys)
+        => ResolveIdsOrCache(context, keys, "cacheId", "cache_id");
+
+    public static List<int> ResolveIdsOrCache(
+        AIToolContext context,
+        IReadOnlyList<string> idKeys,
+        params string[] cacheKeys)
     {
-        var all = keys.Length > 0 ? keys : new[] { "elementIds", "element_ids", "elementId", "element_id" };
+        var all = idKeys.Count > 0
+            ? idKeys.ToArray()
+            : new[] { "elementIds", "element_ids", "elementId", "element_id" };
         var ids = WriteArgs.Ids(context, all);
 
         if (ids.Count == 0)
         {
-            var cacheKeys = new[] { "cacheId", "cache_id" };
             foreach (var cacheKey in cacheKeys)
             {
                 var cacheId = WriteArgs.Text(context, cacheKey);
@@ -297,9 +304,28 @@ internal sealed class JoinGeometryImplementation : IToolImplementation
         var service = adapter.ElementOpsService ?? throw new InvalidOperationException("无法获取 ElementOpsService");
         var document = ElementOpsArgs.RequireDocument(adapter, context);
 
-        var first = ElementOpsArgs.ResolveIds(context, "element1Ids", "element1_ids", "element1Id", "element1_id");
-        var second = ElementOpsArgs.ResolveIds(context, "element2Ids", "element2_ids", "element2Id", "element2_id");
-        var operation = WriteArgs.Text(context, "operation") ?? "join";
+        var first = ElementOpsArgs.ResolveIdsOrCache(
+            context,
+            new[] { "element1Ids", "element1_ids", "element1Id", "element1_id" },
+            "element1CacheId",
+            "element1_cache_id");
+        var second = ElementOpsArgs.ResolveIdsOrCache(
+            context,
+            new[] { "element2Ids", "element2_ids", "element2Id", "element2_id" },
+            "element2CacheId",
+            "element2_cache_id");
+        var operation = (WriteArgs.Text(context, "operation") ?? "join").Trim().ToLowerInvariant();
+        if (operation is not ("join" or "unjoin" or "switch"))
+        {
+            return Task.FromResult(AIToolResult.Fail(
+                $"不支持的操作类型: {operation}，请使用 'join'、'unjoin' 或 'switch'"));
+        }
+
+        if (first.Count == 0 || second.Count == 0)
+        {
+            return Task.FromResult(AIToolResult.Fail(
+                "第一个和第二个元素列表都不能为空；请提供元素 ID、ID 数组或对应 CacheId。"));
+        }
 
         var affected = service.JoinGeometry(document, first, second, operation);
         return Task.FromResult(affected > 0
@@ -316,9 +342,28 @@ internal sealed class CutGeometryImplementation : IToolImplementation
         var service = adapter.ElementOpsService ?? throw new InvalidOperationException("无法获取 ElementOpsService");
         var document = ElementOpsArgs.RequireDocument(adapter, context);
 
-        var toCut = ElementOpsArgs.ResolveIds(context, "elementToCutIds", "element_to_cut_ids", "elementToCutId", "element_to_cut_id");
-        var cutting = ElementOpsArgs.ResolveIds(context, "cuttingElementIds", "cutting_element_ids", "cuttingElementId", "cutting_element_id");
-        var operation = WriteArgs.Text(context, "operation") ?? "cut";
+        var toCut = ElementOpsArgs.ResolveIdsOrCache(
+            context,
+            new[] { "elementToCutIds", "element_to_cut_ids", "elementToCutId", "element_to_cut_id" },
+            "elementToCutCacheId",
+            "element_to_cut_cache_id");
+        var cutting = ElementOpsArgs.ResolveIdsOrCache(
+            context,
+            new[] { "cuttingElementIds", "cutting_element_ids", "cuttingElementId", "cutting_element_id" },
+            "cuttingElementCacheId",
+            "cutting_element_cache_id");
+        var operation = (WriteArgs.Text(context, "operation") ?? "cut").Trim().ToLowerInvariant();
+        if (operation is not ("cut" or "uncut"))
+        {
+            return Task.FromResult(AIToolResult.Fail(
+                $"不支持的操作类型: {operation}，请使用 'cut' 或 'uncut'"));
+        }
+
+        if (toCut.Count == 0 || cutting.Count == 0)
+        {
+            return Task.FromResult(AIToolResult.Fail(
+                "被剪切元素和剪切元素列表都不能为空；请提供元素 ID、ID 数组或对应 CacheId。"));
+        }
 
         var affected = service.CutGeometry(document, toCut, cutting, operation);
         return Task.FromResult(affected > 0

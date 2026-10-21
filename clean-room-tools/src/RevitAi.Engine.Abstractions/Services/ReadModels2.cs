@@ -24,7 +24,8 @@ public sealed record ElementGeometryInfo(
     double MaxZ,
     int SolidCount,
     int CurveCount,
-    string Unit);
+    string Unit,
+    double? SurfaceAreaSquareMeters = null);
 
 public sealed record ProjectUnitsInfo(
     string LengthUnit,
@@ -44,7 +45,12 @@ public sealed record ViewSettingsInfo(
     bool CropActive,
     bool CropBoxVisible);
 
-public sealed record ViewFilterInfo(int FilterId, string Name, bool Enabled, bool Visible);
+public sealed record ViewFilterInfo(
+    int FilterId,
+    string Name,
+    bool Enabled,
+    bool Visible,
+    IReadOnlyList<string>? Rules = null);
 
 public sealed record CategoryVisibilityInfo(int ViewId, string Category, bool Visible);
 
@@ -63,7 +69,7 @@ public interface IElementQueryService
 {
     IReadOnlyList<ElementSummaryInfo> GetAllElements(object document, string? categoryName, int limit);
 
-    ElementGeometryInfo? GetElementGeometry(object document, int elementId);
+    ElementGeometryInfo? GetElementGeometry(object document, int elementId, bool computeReferences = false);
 }
 
 /// <summary>项目单位查询。</summary>
