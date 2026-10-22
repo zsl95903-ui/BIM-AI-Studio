@@ -17,16 +17,16 @@
 | 用途 | 旧路径（≤2.1.0 文档） | 实际/新路径 |
 | --- | --- | --- |
 | 桥接发现文件 | `%LOCALAPPDATA%\ReVitAI\revitai-bridge.json` | `%LOCALAPPDATA%\RevitAi\bridge.json` |
-| Codex 高精度桥 | — | `%LOCALAPPDATA%\RevitAi\codex-bridge.json` |
 | 安装目录 | `%LOCALAPPDATA%\Programs\RevitAi` | 不变 |
 | 运行日志 | — | `%LOCALAPPDATA%\RevitAi\logs\` |
 
-如果脚本里写死了 `ReVitAI\revitai-bridge.json`，请改为读取 `RevitAi\bridge.json`，并优先尝试 `codex-bridge.json`。
+如果脚本写死了单个发现文件路径，请改为依次检查
+`RevitAi\bridge.json` 和 `ReVitAI\revitai-bridge.json`。
 
 ## 升级步骤
 
 1. 关闭 Revit。
-2. 在「控制面板 → 应用」卸载旧版（显示名可能为 `Revit AI` 或 `ReVitAI Bridge`）。
+2. 在「控制面板 → 应用」卸载已有安装。
 3. 删除残留的 `%LOCALAPPDATA%\ReVitAI\`（如果存在）。
 4. 安装 BIM-AI Studio。
 5. 启动 Revit，确认加载项列表里出现 **BIM-AI Studio Bridge**。
@@ -47,4 +47,5 @@
 确保 Revit 已打开一个工程，并且加载项已加载。桥接在加载项启动时写发现文件，关闭时删除。
 
 **工具数量对不上？**
-以 `revit-ai.ps1 tools` 的实时返回为准。文档里的 48 / 120 / 119 分别是 Bridge 稳定工具、工具集源码数量、运行时目录数量。
+以 `revit-ai.ps1 tools` 的实时返回为准。文档中的 48 和 120 分别表示
+Bridge 工具数量和工具集契约数量；运行时目录数量取决于当前加载项。

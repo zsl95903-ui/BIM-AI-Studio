@@ -18,7 +18,6 @@ if ([string]::IsNullOrWhiteSpace($PatternName)) {
 $directory = Join-Path $env:LOCALAPPDATA "ReVitAI"
 $discoveryPaths = @(
     (Join-Path $directory "revitai-bridge.json"),
-    (Join-Path $directory "codex-bridge.json"),
     (Join-Path $directory "bridge.json")
 )
 

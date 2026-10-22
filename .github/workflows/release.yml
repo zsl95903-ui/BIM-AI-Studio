@@ -27,14 +27,14 @@ jobs:
         shell: pwsh
         run: |
           $gen = Join-Path $env:RUNNER_TEMP 'generated'
-          dotnet run --project clean-room-tools/tools/ToolSetGenerator/ToolSetGenerator.csproj `
+          dotnet run --project toolset/tools/ToolSetGenerator/ToolSetGenerator.csproj `
             -c Release --nologo -- `
-            --catalog clean-room-tools/contracts/tool-contracts.json `
+            --catalog toolset/contracts/tool-contracts.json `
             --out-tools $gen --namespace ExtToolLib
           if ($LASTEXITCODE -ne 0) { throw 'generation failed' }
-          dotnet run --project clean-room-tools/tests/RevitAi.Engine.SmokeTests/RevitAi.Engine.SmokeTests.csproj `
+          dotnet run --project toolset/tests/RevitAi.Engine.SmokeTests/RevitAi.Engine.SmokeTests.csproj `
             -c Release --nologo -- `
-            --external clean-room-tools/contracts/external-tools.json `
+            --external toolset/contracts/external-tools.json `
             --tool-index (Join-Path $gen 'tool-index.json')
           if ($LASTEXITCODE -ne 0) { throw 'smoke tests failed' }
 

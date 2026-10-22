@@ -7,8 +7,8 @@ The bridge exists to make Revit automation explicit, typed, observable, and reco
 ## Components
 
 - `agent/revit-2027`: Codex skill - discovery script, tool invocation, modeling recipes.
-- `clean-room-tools`: standalone engine - contracts, registry, host, services, smoke tests.
-- `clean-room-tools`: Apache-2.0 120-tool source set, contracts, generated tools, services and tests.
+- `toolset`: standalone engine - contracts, registry, host, services, smoke tests.
+- `toolset`: Apache-2.0 120-tool source set, contracts, generated tools, services and tests.
 - `ReVitAI.Bridge`: Revit add-in host and `ToolDispatcher`.
 - `BridgeServer`: current-user Named Pipe server and discovery file.
 - `ExternalEventInvoker`: moves requests onto the Revit API thread.
@@ -27,7 +27,7 @@ RevitAi.McpServer or direct JSON client
         |
         v
 %LOCALAPPDATA%\RevitAi\bridge.json
-%LOCALAPPDATA%\RevitAi\codex-bridge.json
+%LOCALAPPDATA%\RevitAi\bridge.json
         |
         v
 Named Pipe (current user)
@@ -61,7 +61,7 @@ ToolDispatcher
 
 The wider Revit AI deployment uses two isolated entrypoints:
 
-- **Legacy Native**: original built-in Agent workflow and native registry.
+- **Native Agent**: in-process Agent workflow and native registry.
 - **Codex Contract**: headless Batch bridge and MCP server, no ribbon UI.
 
 Only one manifest should be active at a time. This prevents shared static registries and external state from competing in the Revit process.

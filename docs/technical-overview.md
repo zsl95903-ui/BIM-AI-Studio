@@ -45,8 +45,8 @@ Revit API 的对象模型具有线程亲和性，绝大多数读写必须在应�
 
 | 仓库 | 职责 | 关键目录 |
 | --- | --- | --- |
-| `BIM-AI-Studio` | 工具契约、注册表、服务层、120 个工具源码 | `clean-room-tools/`、`src/ReVitAI.Bridge/`、`agent/revit-2027/` |
-| `BIM-AI-Studio-App` | 加载入口、上层界面、模型接入、PDF 处理 | `host/hybrid-ui/`、`host/production-bridge/`、`src/RevitAi.*/` |
+| `BIM-AI-Studio` | 工具契约、注册表、服务层、120 个工具源码 | `toolset/`、`src/ReVitAI.Bridge/`、`agent/revit-2027/` |
+| `BIM-AI-Studio-App` | 加载入口、上层界面、模型接入、PDF 处理 | `host/hybrid-ui/` |
 
 应用层通过 git submodule 引用工具层源码，不依赖预编译产物。
 
@@ -217,7 +217,7 @@ AgentLoop
 
 ```
 Codex / MCP client
-   │  读取 %LOCALAPPDATA%\RevitAi\codex-bridge.json
+   │  读取可用的 bridge discovery 文件
    ▼
 Named Pipe（当前用户）
    │  {"type":"invoke","tool":"...","arguments":{...}}
@@ -288,7 +288,7 @@ ToolDispatcher / Registry
 | 单文档 | 未验证多文档并发 | 引入文档上下文标识 |
 | 非流式响应 | 当前客户端一次请求一次响应 | 增加 SSE 解析与增量渲染 |
 | Schema 手写 | 工具契约以字符串声明 | 由生成器产出并校验 |
-| 依赖集合 | 工具层需要第三方 DLL 集合 | 迁移为 NuGet 包 |
+| 依赖集合 | 多数依赖已迁移为 NuGet 包 | 新增依赖必须进入许可审计 |
 
 ---
 
@@ -309,15 +309,15 @@ ToolDispatcher / Registry
 | 项 | 状态 |
 | --- | --- |
 | Bridge 稳定工具 | 48 个，可构建 |
-| 工具层源码 | 120 个工具（3 个项目），需依赖集合 |
-| 运行时工具目录 | 119 项，由已安装插件返回 |
+| 工具层源码 | 120 项契约工具 + 1 项扩展，源码与生成器完整 |
+| 运行时工具目录 | 以当前加载项、Bridge 或 MCP 返回为准 |
 | 应用层入口 | 混合 UI + 桥接，源码完整 |
 | 账户体系 | 不含，远端能力以最小桩返回默认值 |
 
 构建注意：
 
-- 工具层的 `Directory.Build.props` 引用了未入库的第三方依赖集合；
-- 带 WPF 的工程需要完整的 .NET SDK（含 workload 组件）。
+- 工具层的构建依赖通过 NuGet 和本机 Revit API 提供；
+- 带 WPF 的工程需要完整的 .NET SDK。
 
 ---
 

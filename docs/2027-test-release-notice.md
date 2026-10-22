@@ -5,8 +5,9 @@
 ## 包含内容
 
 - `releases/2027-test/RevitAI-Hybrid-Setup-5.0.0.exe`
-- `clean-room-tools/`
-- `worktree/`
+- `toolset/`
+- 应用层源码由 [`BIM-AI-Studio-App`](https://github.com/zsl95903-ui/BIM-AI-Studio-App)
+  的 `host/hybrid-ui/` 维护
 
 ## 风险提示
 
@@ -15,10 +16,10 @@
 - 安装前请关闭 Revit。
 - 本仓库不包含本机用户配置、日志、会话记录、缓存、API Key 或机器指纹数据。
 
-## Codex 桥接
+## 命名管道桥接
 
-Revit AI UI 插件启动时会默认启动内置 Codex 桥，并写入：
+应用加载项启动时会启动命名管道宿主，并写入：
 
-`%LOCALAPPDATA%\RevitAi\codex-bridge.json`
+`%LOCALAPPDATA%\RevitAi\bridge.json`
 
-外部 Codex 客户端可通过该 discovery 文件连接并调用插件注册的 Revit 工具。
+外部客户端可通过该 discovery 文件连接并调用插件注册的 Revit 工具。

@@ -1,5 +1,8 @@
 BIM-AI Studio
-Copyright 2026 zsl95903-ui
+Copyright 2026 BIM-AI Studio contributors
 
-The project-authored source, clean-room 120-tool implementation,
-contracts, tests and build scripts are licensed under Apache-2.0.
+Project-authored source, the 120-tool contract catalog, generated tool classes,
+tests and build scripts are licensed under Apache-2.0.
+
+External dependencies remain under their respective licenses. See
+THIRD_PARTY_NOTICES.md.

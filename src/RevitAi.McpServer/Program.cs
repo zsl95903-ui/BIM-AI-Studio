@@ -390,7 +390,7 @@ static string? ResolvePipeName(string? configuredPipe)
         var directory = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "RevitAi");
-        foreach (var fileName in new[] { "revitai-bridge.json", "codex-bridge.json", "bridge.json" })
+        foreach (var fileName in new[] { "revitai-bridge.json", "bridge.json" })
         {
             var path = Path.Combine(directory, fileName);
             if (!File.Exists(path))

@@ -10,8 +10,8 @@ Use this skill when the user asks Codex to inspect or modify the currently open 
 ## Connection And Discovery
 
 - Run `scripts/revit-smoke.ps1` first. It verifies the named pipe, discovers the live tool catalog, and reads the current levels without modifying the model.
-- The client prefers `%LOCALAPPDATA%\RevitAi\codex-bridge.json` (Codex high-precision bridge) and falls back to `%LOCALAPPDATA%\RevitAi\bridge.json` (original Revit AI console).
-- Keep the original `Revit Ai` add-in enabled. The Codex bridge must remain side-by-side and must not disable or overwrite `RevitAi.addin`.
+- The client checks `%LOCALAPPDATA%\RevitAi\bridge.json` and `%LOCALAPPDATA%\ReVitAI\revitai-bridge.json`.
+- Keep the BIM-AI Studio application add-in enabled.
 - Use `scripts/revit-ai.ps1 tools` for the authoritative live catalog.
 - For structured engineering drawing, use `apply_drawing_plan` with a root `viewName` or fresh `viewId`, `activateView: true`, and `autoZoom: true`.
 - Prefer `create_detail_curves` for lines, center arcs, three-point arcs, and polylines; prefer `create_text_notes` for recognized PDF/CAD text.

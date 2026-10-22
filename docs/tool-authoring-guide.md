@@ -1,7 +1,7 @@
 # 工具编写指南（Tool Authoring Guide）
 
-> 依据：本仓库的 `clean-room-tools/` 以及 `agent/revit-2027/` 中的桥接契约。
-> 本文的模板来自 Apache-2.0 的 clean-room 工具层，可直接作为新工具的实现基线。
+> 依据：本仓库的 `toolset/` 以及 `agent/revit-2027/` 中的桥接契约。
+> 本文的模板来自 Apache-2.0 工具层，可直接作为新工具的实现基线。
 
 ---
 
@@ -55,15 +55,15 @@
 └──────────────────────────────────────────────────────────────┘
 ```
 
-这套分层在归档里有三处互相印证的实现：
+当前实现中的对应位置：
 
-| 结论 | 证据 |
+| 结论 | 代码位置 |
 | --- | --- |
-| 工具用特性声明元数据，用 JSON 字符串声明参数 | `ExtTools-Rebuild\src\reviewed\R2027\Ext.Tools.Abstractions\Ext.Tools.Abstractions.AI\IAITool.cs`、`AIToolAttribute.cs` |
-| 注册表用反射扫描 + 构造函数按类型注入服务 | `06-Codex历史工作目录\deepseek-harness\revitai-engine-poc\src\RevitAi.Engine.Core\AIToolRegistry.cs` |
-| 事务由宿主统一开启，工具成功才 Commit | `...\revitai-engine-poc\src\RevitAi.Engine.Revit\RevitToolHost.cs`、`RevitAi.Revit\RevitAi.Revit.AI\AIToolExternalEventHandler.cs` |
-| 绘图最终都落到 `Wall.Create` / `Floor.Create` / `NewDetailCurve` / `TextNote.Create` / `NewDimension` | `RevitAi.Revit\RevitAi.Revit.Services\ElementService.cs`、`AnnotationService.cs`、`2026-09-16\revit2027\work\RevitCodexBridge\DrawingCommands.cs` |
-| 对外只暴露命名管道 + discovery 文件 | `2026-10-08\120-revitai\production-bridge\RevitAi.CodexBridge\CodexBridgeApplication.cs` |
+| 工具用特性声明元数据，用 JSON 字符串声明参数 | `toolset/src/RevitAi.Engine.Abstractions/IAITool.cs`、`AIToolAttribute.cs` |
+| 注册表用反射扫描 + 构造函数按类型注入服务 | `toolset/src/RevitAi.Engine.Core/AIToolRegistry.cs` |
+| 事务由宿主统一开启，工具成功才 Commit | `toolset/src/RevitAi.Engine.Revit/RevitToolHost.cs` |
+| 绘图最终落到 `Wall.Create` / `Floor.Create` / `NewDetailCurve` / `TextNote.Create` / `NewDimension` | `toolset/src/RevitAi.Engine.Revit/Services/` |
+| 对外暴露命名管道 + discovery 文件 | `src/ReVitAI.Bridge/BridgeServer.cs`、`src/RevitAi.McpServer/Program.cs` |
 
 ---
 
@@ -727,15 +727,15 @@ public sealed class AIToolResult
 
 | 内容 | 路径 |
 | --- | --- |
-| 工具接口与特性 | `clean-room-tools/src/RevitAi.Engine.Abstractions/` |
+| 工具接口与特性 | `toolset/src/RevitAi.Engine.Abstractions/` |
 | 工具上下文/结果 | 同上：`AIToolContext.cs`、`AIToolResult.cs`、`IAIToolRegistry.cs` |
-| 反射注册表 | `clean-room-tools/src/RevitAi.Engine.Core/AIToolRegistry.cs` |
-| 事务宿主 | `clean-room-tools/src/RevitAi.Engine.Revit/RevitToolHost.cs` |
-| 调度与结果判定 | `clean-room-tools/src/RevitAi.Engine.Core/AIToolInvocationHandler.cs` |
-| 墙/板/门窗实现 | `clean-room-tools/src/RevitAi.Engine.Revit/Services/ElementAndModificationServices.cs` |
-| 文字/标记/尺寸实现 | `clean-room-tools/src/RevitAi.Engine.Revit/Services/WriteServices.cs` |
-| 120 工具批量实现 | `clean-room-tools/src/RevitToolSet.Implementations/` |
-| 生成器 | `clean-room-tools/tools/ToolSetGenerator/Program.cs` |
+| 反射注册表 | `toolset/src/RevitAi.Engine.Core/AIToolRegistry.cs` |
+| 事务宿主 | `toolset/src/RevitAi.Engine.Revit/RevitToolHost.cs` |
+| 调度与结果判定 | `toolset/src/RevitAi.Engine.Core/AIToolInvocationHandler.cs` |
+| 墙/板/门窗实现 | `toolset/src/RevitAi.Engine.Revit/Services/ElementAndModificationServices.cs` |
+| 文字/标记/尺寸实现 | `toolset/src/RevitAi.Engine.Revit/Services/WriteServices.cs` |
+| 120 工具批量实现 | `toolset/src/ExtToolLib.Implementations/` |
+| 生成器 | `toolset/tools/ToolSetGenerator/Program.cs` |
 | 桥接协议 | `docs/bridge-protocol.md` |
 | 工具目录快照 | `agent/revit-2027/references/tool-catalog.json`（以运行时 `tools list` 为准） |
 

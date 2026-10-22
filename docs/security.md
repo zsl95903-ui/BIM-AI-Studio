@@ -8,4 +8,4 @@
 - Arbitrary code execution is not part of the tool catalog.
 - File paths are resolved by explicit tools only.
 - Models, logs and exports are not committed to the repository.
-- Review all third-party binaries before creating a release package.
+- Review all external binaries before creating a release package.

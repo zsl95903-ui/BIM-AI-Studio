@@ -5,8 +5,8 @@
 - Autodesk Revit 2027 is running.
 - An active document is open.
 - The `Revit AI` add-in is loaded and the ribbon contains `Revit AI > AI Console`.
-- The original Revit AI bridge discovery file exists at `%LOCALAPPDATA%\RevitAi\bridge.json`.
-- The Codex high-precision bridge uses a separate `%LOCALAPPDATA%\RevitAi\codex-bridge.json`; clients prefer it and fall back to the original bridge.
+- A live discovery file exists at `%LOCALAPPDATA%\RevitAi\bridge.json` or
+  `%LOCALAPPDATA%\ReVitAI\revitai-bridge.json`.
 
 The bridge uses a Windows Named Pipe with `PipeOptions.CurrentUserOnly`; it does not expose an HTTP port.
 

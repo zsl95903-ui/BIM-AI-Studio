@@ -25,8 +25,8 @@ function Get-BridgeDiscoveryCandidates {
         $candidates += $DiscoveryPath
     }
 
-    $candidates += Join-Path $env:LOCALAPPDATA "RevitAi\codex-bridge.json"
     $candidates += Join-Path $env:LOCALAPPDATA "RevitAi\bridge.json"
+    $candidates += Join-Path $env:LOCALAPPDATA "ReVitAI\revitai-bridge.json"
     $candidates | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
 }
 
@@ -59,7 +59,7 @@ function Read-BridgeDiscovery {
     }
 
     $detail = if ($stale.Count -gt 0) { " Stale or invalid files: $($stale -join '; ')" } else { "" }
-    throw "No live Revit bridge discovery file was found. Codex bridge: $env:LOCALAPPDATA\RevitAi\codex-bridge.json; Revit AI bridge: $env:LOCALAPPDATA\RevitAi\bridge.json.$detail"
+    throw "No live Revit bridge discovery file was found. Checked RevitAi\bridge.json and ReVitAI\revitai-bridge.json.$detail"
 }
 
 function Invoke-BridgeRequest {
