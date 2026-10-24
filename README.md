@@ -14,7 +14,7 @@ Revit 主线程调度、事务与回滚、命名管道桥接、MCP 转发和 Age
 
 - 主要目标平台为 Autodesk Revit 2027、Windows x64 和 .NET 10。
 - 本项目由个人开发者维护，代码、兼容性和文档会持续改进。
-- 工具层自动验证为 355 项通过、0 项失败；Bridge 与 MCP Server 可独立编译。
+- 工具层自动验证为 352 项通过、0 项失败；Bridge 与 MCP Server 可独立编译。
 - 自动测试主要使用模拟 Revit 适配器，不等同于对所有 Revit 项目的完整现场
   验证。
 - 复杂 MEP、道路、楼梯、地形、CAD 附件、批量族参数、明细表和多进程并发
@@ -28,7 +28,7 @@ Revit 主线程调度、事务与回滚、命名管道桥接、MCP 转发和 Age
 | 模块 | 目录 | 说明 |
 | --- | --- | --- |
 | Toolset | `toolset` | 120 项工具契约、121 个生成工具入口、服务层、注册表和测试 |
-| Bridge | `src/ReVitAI.Bridge` | Revit 命名管道宿主、事务调度和 48 个桥接工具 |
+| Bridge | `src/ReVitAI.Bridge` | Revit 命名管道宿主、事务调度和 145 个统一工具 |
 | MCP Server | `src/RevitAi.McpServer` | 将实时 Revit 工具目录暴露为 MCP tools |
 | Agent Skill | `agent/revit-2027` | Codex 调用脚本、建模配方与工具目录 |
 | Application | `BIM-AI-Studio-App` | WebView2 UI、OpenAI-compatible 模型客户端和 Revit 加载入口 |
@@ -54,6 +54,8 @@ Codex / MCP client / script
    Service Layer -> Autodesk Revit API
 ```
 
+协议 3.0 让 App 与独立 Bridge 共用 ToolDispatcher：119 项启用主契约 + 26 项专业扩展，共 145 项。同名工具采用主契约参数；升级后重新读取 Schema。详见 [桥接协议](docs/bridge-protocol.md)。
+
 工具契约同时服务三个入口：
 
 - WebView2 应用通过兼容层调用 `IAIToolRegistry`；
@@ -66,8 +68,8 @@ Codex / MCP client / script
 | --- | ---: | --- |
 | 工具契约 | 120 | `toolset/contracts/tool-contracts.json` |
 | 生成工具入口 | 121 | 120 项契约工具和 `upsert_level` 扩展 |
-| 自动验证 | 355 | 契约、参数解析、服务与工具行为 |
-| Bridge 工具 | 48 | 实时命名管道桥接目录 |
+| 自动验证 | 352 | 契约、参数解析、服务与工具行为 |
+| 统一运行时工具 | 145 | App 与独立 Bridge 共用的实时目录 |
 
 工具数量以运行时返回为准。新增工具时先定义 JSON Schema，再实现 `IAITool`
 并通过宿主设定事务和线程要求。

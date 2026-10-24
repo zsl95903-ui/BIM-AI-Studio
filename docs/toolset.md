@@ -27,7 +27,7 @@ All project-authored source in this directory is licensed under Apache-2.0.
 
 - 120/120 contract tools have implementations.
 - 121 generated tool entry points include the project extension.
-- The current smoke suite reports 355 passed assertions and 0 failures.
+- The current smoke suite reports 352 passed assertions and 0 failures.
 - 117 tools are directly exercised by smoke tests.
 - Revit-internal self-tests cover the remaining host-bound tools.
 - The Addin compiles against the local Revit 2027 API.

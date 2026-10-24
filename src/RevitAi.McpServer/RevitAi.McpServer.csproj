@@ -9,4 +9,5 @@
     <LangVersion>latest</LangVersion>
     <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
+  <ItemGroup><Compile Include="..\Shared\BridgeProtocol.cs" Link="Protocol\BridgeProtocol.cs" /></ItemGroup>
 </Project>

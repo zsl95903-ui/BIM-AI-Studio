@@ -90,6 +90,7 @@ internal sealed partial class ToolDispatcher
         };
 
         _tools = tools.ToDictionary(tool => tool.Name, StringComparer.OrdinalIgnoreCase);
+        RegisterCanonicalTools();
     }
 
     public IReadOnlyCollection<ToolDefinition> Tools => _tools.Values;
@@ -103,11 +104,12 @@ internal sealed partial class ToolDispatcher
                 tool.Name,
                 tool.Description,
                 tool.Category,
-                ToolSet = "ReVitAI",
+                ToolSet = tool.Category,
                 tool.Mutating,
                 tool.RequiresActiveDocument,
-                SupportsDryRun = !tool.Name.Equals("zoom_to_elements", StringComparison.OrdinalIgnoreCase)
-                    && !tool.Name.Equals("export_view_image", StringComparison.OrdinalIgnoreCase),
+                SupportsDryRun = SupportsDryRun(tool.Name),
+                RequiresTransaction = tool.RequiresTransaction,
+                ProtocolVersion = BimAi.Protocol.BridgeProtocol.Version,
                 InputSchema = includeSchema ? tool.InputSchema ?? GenericSchema() : null,
             })
             .ToArray();
@@ -122,14 +124,14 @@ internal sealed partial class ToolDispatcher
     public async Task<object?> ExecuteAsync(
         ExternalEventInvoker invoker,
         string tool,
-        JsonElement arguments)
+        JsonElement arguments, CancellationToken cancellationToken = default, string? expectedDocumentGuid = null)
     {
         if (!_tools.ContainsKey(tool))
         {
             throw new InvalidOperationException($"Tool '{tool}' was not found.");
         }
 
-        return await invoker.InvokeAsync(tool, arguments).ConfigureAwait(false);
+        return await invoker.InvokeAsync(tool, arguments, cancellationToken, expectedDocumentGuid).ConfigureAwait(false);
     }
 
     public object? ExecuteOnRevitThread(UIApplication app, PendingCommand command)
@@ -139,10 +141,13 @@ internal sealed partial class ToolDispatcher
             throw new InvalidOperationException($"Tool '{command.Tool}' was not found.");
         }
 
+        command.CancellationToken.ThrowIfCancellationRequested();
+        ValidateArguments(command.Tool, command.Arguments);
         var dryRun = Json.Bool(
             command.Arguments,
             "dryRun",
             Json.Bool(command.Arguments, "dry_run"));
+        if (dryRun && !SupportsDryRun(command.Tool)) throw new ArgumentException("dry_run_not_supported: this tool cannot safely preview all side effects.");
         if (command.Tool.Equals("apply_drawing_plan", StringComparison.OrdinalIgnoreCase))
         {
             return ExecuteDrawingPlanPhased(app, command.Arguments, dryRun);
@@ -159,7 +164,7 @@ internal sealed partial class ToolDispatcher
             });
         }
 
-        var readOnly = IsReadOnly(command.Tool, command.Arguments);
+        var readOnly = _canonical.Contains(command.Tool) ? !definition.RequiresTransaction : IsReadOnly(command.Tool, command.Arguments);
         if (readOnly)
         {
             return definition.Handler(new InvocationContext
@@ -189,6 +194,7 @@ internal sealed partial class ToolDispatcher
                 UiApplication = app,
                 Arguments = command.Arguments,
                 DryRun = dryRun,
+                Transaction = transaction,
             });
 
             if (dryRun)
@@ -202,7 +208,7 @@ internal sealed partial class ToolDispatcher
                 };
             }
 
-            transaction.Commit();
+            EnsureCommitted(transaction.Commit());
             return result;
         }
         catch
@@ -1088,7 +1094,7 @@ internal sealed partial class ToolDispatcher
         View? planView = null;
         if (HasAnyProperty(source, "viewId", "view_id", "viewName", "view_name"))
         {
-            if (Json.Bool(source, "activateView", true))
+            if (!dryRun && Json.Bool(source, "activateView", true))
             {
                 planView = ResolveView(document, source, null);
                 context.UiDocument.RequestViewChange(planView);
@@ -1119,7 +1125,7 @@ internal sealed partial class ToolDispatcher
                     includeDimensions: false,
                     pendingZoomIds);
                 document.Regenerate();
-                transaction.Commit();
+                EnsureCommitted(transaction.Commit());
             }
 
             using (var transaction = new Transaction(document, $"{BatchName}: Dimensions"))
@@ -1135,7 +1141,7 @@ internal sealed partial class ToolDispatcher
                     stopOnError,
                     includeDimensions: true,
                     pendingZoomIds);
-                transaction.Commit();
+                EnsureCommitted(transaction.Commit());
             }
 
             if (dryRun)
@@ -1144,7 +1150,7 @@ internal sealed partial class ToolDispatcher
             }
             else
             {
-                group.Assimilate();
+                EnsureCommitted(group.Assimilate());
             }
         }
         catch
@@ -1175,7 +1181,7 @@ internal sealed partial class ToolDispatcher
                         .Where(element => element is not null)
                         .Cast<Element>(),
                     Json.Double(source, "cropMarginMm", 500));
-                cropTransaction.Commit();
+                EnsureCommitted(cropTransaction.Commit());
             }
             catch (Exception ex)
             {
@@ -1287,7 +1293,7 @@ internal sealed partial class ToolDispatcher
         }
     }
 
-    private static object ExecuteBatch(InvocationContext context)
+    private object ExecuteBatch(InvocationContext context)
     {
         var operations = Json.Array(context.Arguments, "steps").ToArray();
         var results = new List<object>();
@@ -1308,8 +1314,10 @@ internal sealed partial class ToolDispatcher
 
             try
             {
-                var dispatcher = new ToolDispatcher();
-                var toolDefinition = dispatcher._tools[tool];
+                var toolDefinition = _tools[tool];
+                if (tool is "batch" or "apply_drawing_plan" or "save_document" or "save_document_as" || tool.StartsWith("export_", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("This tool must execute as a separate request, outside batch.");
+                ValidateArguments(tool, args);
                 var data = toolDefinition.Handler(context with { Arguments = args });
                 results.Add(new
                 {

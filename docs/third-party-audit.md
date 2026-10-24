@@ -20,7 +20,7 @@ Scope: BIM-AI Studio source tree and release packages.
 - `toolset/` contains the Apache-2.0 120-tool source set, generated classes, tests and services.
 - The repository contains project-authored source only.
 - UI, account, billing, entitlement and update modules are not included.
-- The release package contains one project-authored assembly: `ReVitAI.Bridge.dll`.
+- The release contains the Bridge and required project-authored toolset assemblies, plus MIT-licensed ACadSharp.
 - Autodesk API binaries are not included.
 - `ReVitAI.Bridge` requires no NuGet `PackageReference`; `toolset` uses MIT-licensed `ACadSharp` 3.4.9.
 - No external installer or compiled dependency assembly is committed to the repository.
@@ -29,7 +29,7 @@ Scope: BIM-AI Studio source tree and release packages.
 
 - [x] Confirm the assembly name and namespace are `ReVitAI.Bridge`.
 - [x] Confirm the bridge assembly version is `2.1.0.0`.
-- [x] Confirm the release package contains one distributed assembly.
+- [x] Verify unified runtime dependencies are present and Autodesk API assemblies are excluded.
 - [x] Confirm Autodesk API binaries are not packaged.
 - [x] Confirm no local model, log, screenshot, or export file is packaged.
 - [x] Confirm no credential or test endpoint is packaged.

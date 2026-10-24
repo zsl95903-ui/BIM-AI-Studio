@@ -4,7 +4,7 @@
 
 | 目录 | 内容 |
 | --- | --- |
-| `src/ReVitAI.Bridge` | 类型化桥接、调度器、Schema、事务与 48 个稳定工具 |
+| `src/ReVitAI.Bridge` | 类型化桥接、调度器、Schema、事务与 145 个统一工具 |
 | `src/RevitAi.McpServer` | stdio MCP 转发器 |
 | `toolset` | 120 工具层：契约、注册表、宿主、服务层、生成器、测试和打包脚本 |
 | `agent/revit-2027` | Codex 技能包 |

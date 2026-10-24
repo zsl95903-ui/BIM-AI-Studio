@@ -1,106 +1,153 @@
-# Tools
+# Unified runtime tools
 
-The canonical machine-readable catalog is [tool-catalog.json](tool-catalog.json).
+Generated from the shared ToolDispatcher. Protocol 3.0; live discovery remains authoritative.
 
-Release: `2.1.0`
+Tool count: **145**
 
-Tool count: **48**
-
-## Groups
-
-### Annotation (3)
-
-| Tool | Write | Dry-run | Description |
-|---|---:|---:|---|
-| `create_detail_curves` | yes | yes | Create detail lines, arcs, and polylines in one view and transaction. |
-| `create_dimension_by_elements` | yes | yes | Create a dimension chain from elements. |
-| `create_text_notes` | yes | yes | Create one or more text notes in a view. |
-
-### Architecture (7)
-
-| Tool | Write | Dry-run | Description |
-|---|---:|---:|---|
-| `create_door` | yes | yes | Create a native door family instance in a host wall. |
-| `create_floor_by_profile` | yes | yes | Create a native floor from a closed profile. |
-| `create_room` | yes | yes | Create and name a room at a point on a level. |
-| `create_straight_wall` | yes | yes | Create a straight native wall. |
-| `create_wall_with_openings` | yes | yes | Create a straight native wall with door or window gaps and header segments. |
-| `create_window` | yes | yes | Create a native window family instance in a host wall. |
-| `get_room_boundaries` | no | yes | Read the boundary loops and segments of a room. |
-
-### Document & Context (7)
-
-| Tool | Write | Dry-run | Description |
-|---|---:|---:|---|
-| `activate_view` | no | yes | Activate a Revit view in the UI. |
-| `get_active_view` | no | yes | Read the active view. |
-| `get_all_views` | no | yes | Read all non-template views. |
-| `get_document_info` | no | yes | Read active document information. |
-| `get_document_snapshot` | no | yes | Read document identity, active view, levels, and context for precise preflight. |
-| `get_project_units` | no | yes | Read effective project length unit. |
-| `ping` | no | yes | Bridge health check. |
-
-### Element Operations (5)
-
-| Tool | Write | Dry-run | Description |
-|---|---:|---:|---|
-| `delete_elements` | yes | yes | Delete one or more elements by ID. |
-| `element_query` | no | yes | Query elements by category, name, type, and limit. |
-| `get_element_geometry` | no | yes | Read bounding box, location, solids, curves, category, and type of an element. |
-| `move_elements` | yes | yes | Move elements by millimetres. |
-| `rotate_element` | yes | yes | Rotate elements by degrees. |
-
-### Levels & Grids (7)
-
-| Tool | Write | Dry-run | Description |
-|---|---:|---:|---|
-| `create_grid` | yes | yes | Create one or more grids. |
-| `create_level` | yes | yes | Create a level at a metre elevation. |
-| `get_all_grids` | no | yes | Read all grids. |
-| `get_all_levels` | no | yes | Read all levels. |
-| `set_level_head_text_size` | yes | yes | Set datum level head text size in millimetres. |
-| `set_level_line_pattern` | yes | yes | Set the projection line pattern for the Level category. |
-| `upsert_level` | yes | yes | Create or update a level by name and elevation. |
-
-### Plans & I/O (5)
-
-| Tool | Write | Dry-run | Description |
-|---|---:|---:|---|
-| `apply_drawing_plan` | yes | yes | Execute a multi-operation drawing plan with dependency phases and one undo group. |
-| `batch` | yes | yes | Execute multiple tools in one transaction. |
-| `import_pdf_underlay` | yes | yes | Import a PDF page as a Revit image underlay. |
-| `save_document` | yes | yes | Save the active document, or save it to a path when provided. |
-| `save_document_as` | yes | yes | Save the active document as a .rvt file. |
-
-### Structure (3)
-
-| Tool | Write | Dry-run | Description |
-|---|---:|---:|---|
-| `create_boxes` | yes | yes | Create extruded 3D boxes for columns, stairs, and massing. |
-| `create_structural_beam` | yes | yes | Create a native structural beam or a structural-framing fallback. |
-| `create_structural_column` | yes | yes | Create a native structural column or a structural-column fallback. |
-
-### Types & Families (4)
-
-| Tool | Write | Dry-run | Description |
-|---|---:|---:|---|
-| `get_family_types` | no | yes | List loaded family types by family, type, and category. |
-| `get_floor_types` | no | yes | Read available floor types. |
-| `get_wall_types` | no | yes | Read available wall types. |
-| `load_family` | yes | yes | Load a Revit family file into the active document. |
-
-### Views (7)
-
-| Tool | Write | Dry-run | Description |
-|---|---:|---:|---|
-| `create_3d_view` | yes | yes | Create or reuse a native 3D view and activate it on the canvas. |
-| `export_view_image` | no | no | Export a view to PNG. |
-| `fit_view_crop_to_elements` | yes | yes | Expand a view crop to include selected or visible elements. |
-| `get_view_settings` | no | yes | Read view crop, outline, scale, and detail level. |
-| `hide_elements_in_view` | yes | yes | Hide or unhide elements in a specific view. |
-| `set_element_color` | yes | yes | Apply a projection-line color override in a view. |
-| `zoom_to_elements` | no | no | Zoom the active view to elements. |
-
-## Write Safety
-
-Mutating tools accept `dryRun` when supported. Plan and batch execution use transactions and can stop on the first error. Readback values are returned after every write.
+| Tool | Category | Mutating | Dry-run |
+|---|---|---|---|
+| activate_view | 视图管理 | false | false |
+| add_compound_structure_layer | 复合层结构 | true | false |
+| apply_drawing_plan | ReVitAI | true | true |
+| array_element | 元素修改 | true | false |
+| batch | ReVitAI | true | false |
+| cad_layer_manager | CAD 图纸识别 | false | false |
+| change_element_types | 元素修改 | true | false |
+| check_collision | 碰撞检查 | false | false |
+| clear_selection | 元素选择 | false | false |
+| code_snippet | 高级工具 | true | false |
+| copy_element | 元素修改 | true | false |
+| create_3d_view | 视图高级操作 | true | false |
+| create_beam | 元素创建 | true | false |
+| create_boxes | ReVitAI | true | true |
+| create_cable_tray | 元素创建 | true | false |
+| create_column | 元素创建 | true | false |
+| create_detail_curves | ReVitAI | true | true |
+| create_dimension_by_elements | 注释与标记 | true | false |
+| create_door | ReVitAI | true | true |
+| create_door_in_wall | 元素创建 | true | false |
+| create_duct | 元素创建 | true | false |
+| create_extrusion_roof | 元素创建 | true | false |
+| create_family_instance | 元素创建 | true | false |
+| create_floor_by_profile | 元素创建 | true | false |
+| create_floor_plan | 视图创建 | true | false |
+| create_footprint_roof | 元素创建 | true | false |
+| create_grid | 元素创建 | true | false |
+| create_level | 元素创建 | true | false |
+| create_pipe | 元素创建 | true | false |
+| create_road_from_walls | 道路建模 | true | false |
+| create_room | 元素创建 | true | false |
+| create_schedule | 视图高级操作 | true | false |
+| create_section_view | 视图管理 | true | false |
+| create_sheet | 文档操作 | true | false |
+| create_spot_dimension | 注释与标记 | true | false |
+| create_stair | 建模工具 | true | false |
+| create_stair_type | 建模工具 | true | false |
+| create_straight_wall | 元素创建 | true | false |
+| create_structural_beam | ReVitAI | true | true |
+| create_structural_column | ReVitAI | true | true |
+| create_tag | 注释与标记 | true | false |
+| create_text_note | 注释与标记 | true | false |
+| create_text_notes | ReVitAI | true | true |
+| create_topography_from_floors | 地形建模 | true | false |
+| create_topography_surface | 地形建模 | true | false |
+| create_view_filter | 视图高级操作 | true | false |
+| create_wall_with_openings | ReVitAI | true | true |
+| create_window | ReVitAI | true | true |
+| create_window_in_wall | 元素创建 | true | false |
+| cut_geometry | 几何操作 | true | false |
+| delete_compound_structure_layer | 复合层结构 | true | false |
+| delete_elements | 元素修改 | true | false |
+| delete_link | 链接管理 | true | false |
+| delete_view_filter | 视图高级操作 | true | false |
+| duplicate_family_type | 族管理 | true | false |
+| duplicate_view | 视图高级操作 | true | false |
+| edit_schedule | 视图高级操作 | true | false |
+| element_group_manager | 元素修改 | true | false |
+| element_lock_manager | 元素操作 | true | false |
+| element_query | 元素查询 | false | false |
+| execute_code | 高级工具 | true | false |
+| export_excel | 数据导出 | false | false |
+| export_schedule_to_csv | 数据导出 | false | false |
+| export_view_image | ReVitAI | false | false |
+| export_view_images | 视图导出 | false | false |
+| export_views_as_dwg | 视图导出 | false | false |
+| filter_elements | 元素查询 | false | false |
+| fit_view_crop_to_elements | ReVitAI | true | true |
+| fix_cutting_order | 几何操作 | true | true |
+| get_active_view | 视图查询 | false | false |
+| get_all_categories | 查询 | false | false |
+| get_all_elements | 元素查询 | false | false |
+| get_all_families | 族管理 | false | false |
+| get_all_grids | 轴网查询 | false | false |
+| get_all_levels | 标高查询 | false | false |
+| get_all_rooms | 房间与分区 | false | false |
+| get_all_tags | 注释与标记 | false | false |
+| get_all_views | 视图管理 | false | false |
+| get_all_worksets | 工作集管理 | false | false |
+| get_available_filter_parameters | 视图高级操作 | false | false |
+| get_cable_tray_types | 机电查询 | false | false |
+| get_cache_data | 数据管理 | false | false |
+| get_category_visibility | 视图管理 | false | false |
+| get_compound_structure_layers | 复合层结构 | false | false |
+| get_document_info | ReVitAI | false | false |
+| get_document_snapshot | ReVitAI | false | false |
+| get_duct_types | 查询工具 | false | false |
+| get_element_geometry | 几何分析 | false | false |
+| get_element_location | 元素查询 | false | false |
+| get_element_phases | 材料管理 | false | false |
+| get_element_workset | 工作集管理 | false | false |
+| get_family_types | 族管理 | false | false |
+| get_floor_types | ReVitAI | false | false |
+| get_grid_intersection | 元素查询 | false | false |
+| get_link_elements | 链接管理 | false | false |
+| get_links | 链接管理 | false | false |
+| get_offset_point | 元素查询 | false | false |
+| get_pipe_types | 机电查询 | false | false |
+| get_project_units | 项目设置 | false | false |
+| get_roof_info | 元素查询 | false | false |
+| get_roof_types | 元素查询 | false | false |
+| get_room_boundaries | 房间与分区 | false | false |
+| get_schedule_fields | 视图查询 | false | false |
+| get_view_filters | 视图高级操作 | false | false |
+| get_view_settings | ReVitAI | false | false |
+| get_wall_types | ReVitAI | false | false |
+| hide_elements_in_view | ReVitAI | true | true |
+| import_pdf_underlay | ReVitAI | true | true |
+| insulation_manager | 保温管理 | true | false |
+| insulation_query | 保温查询 | false | false |
+| join_geometry | 几何操作 | true | false |
+| load_family | ReVitAI | true | false |
+| manage_global_parameters | 参数管理 | true | false |
+| manage_project_parameters | 参数管理 | true | false |
+| manage_shared_parameters | 参数管理 | true | false |
+| material_manager | 材料管理 | true | false |
+| material_query | 材料管理 | false | false |
+| mep_system_manager | 机电管理 | true | false |
+| mep_system_query | 机电查询 | false | false |
+| mirror_element | 元素修改 | true | false |
+| modify_compound_structure_layer | 复合层结构 | true | false |
+| modify_roof | 元素修改 | true | false |
+| move_elements | 元素修改 | true | false |
+| ping | ReVitAI | false | false |
+| purge_unused | 文档维护 | true | false |
+| query_parameter_info | 参数操作 | false | false |
+| read_schedule_data | 视图查询 | false | false |
+| rotate_element | 元素操作 | true | false |
+| save_document | ReVitAI | true | false |
+| save_document_as | ReVitAI | true | false |
+| select_elements | 元素选择 | false | false |
+| set_background_color | 视图管理 | false | false |
+| set_category_visibility | 视图管理 | true | false |
+| set_element_color | 视图高级操作 | true | false |
+| set_level_head_text_size | ReVitAI | true | true |
+| set_level_line_pattern | ReVitAI | true | true |
+| set_parameter_values | 参数操作 | true | false |
+| set_project_units | 项目设置 | true | false |
+| set_view_detail_level | 视图管理 | true | false |
+| set_view_display_style | 视图管理 | true | false |
+| set_view_filter | 视图高级操作 | true | false |
+| split_element | 修改 | true | false |
+| temporary_view_control | 视图管理 | true | false |
+| upsert_level | ReVitAI | true | true |
+| zoom_to_elements | 视图管理 | false | false |

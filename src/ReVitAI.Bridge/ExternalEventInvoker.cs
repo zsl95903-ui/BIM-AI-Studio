@@ -18,12 +18,14 @@ internal sealed class ExternalEventInvoker : IExternalEventHandler
 
     public int PendingCount => _queue.Count;
 
-    public Task<object?> InvokeAsync(string tool, JsonElement arguments)
+    public Task<object?> InvokeAsync(string tool, JsonElement arguments, CancellationToken cancellationToken = default, string? expectedDocumentGuid = null)
     {
         var completion = new TaskCompletionSource<object?>(
             TaskCreationOptions.RunContinuationsAsynchronously);
         _queue.Enqueue(new PendingCommand
         {
+            CancellationToken = cancellationToken,
+            ExpectedDocumentGuid = expectedDocumentGuid,
             Tool = tool,
             Arguments = arguments.Clone(),
             Completion = completion,
@@ -48,9 +50,13 @@ internal sealed class ExternalEventInvoker : IExternalEventHandler
         {
             try
             {
+                pending.CancellationToken.ThrowIfCancellationRequested();
+                var actual = app.ActiveUIDocument?.Document?.CreationGUID.ToString("D");
+                BimAi.Protocol.BridgeProtocol.ValidateTarget(pending.ExpectedDocumentGuid, actual);
                 var result = _dispatcher.ExecuteOnRevitThread(app, pending);
                 pending.Completion.TrySetResult(result);
             }
+            catch (OperationCanceledException) { pending.Completion.TrySetCanceled(pending.CancellationToken); }
             catch (Exception ex)
             {
                 pending.Completion.TrySetException(ex);

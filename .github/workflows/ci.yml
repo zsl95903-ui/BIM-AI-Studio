@@ -24,7 +24,7 @@ jobs:
       - name: Generate tool classes from contracts
         shell: pwsh
         run: |
-          $gen = Join-Path $env:RUNNER_TEMP 'generated'
+          $gen = Join-Path $env:TEMP 'revitai-engine/generated'
           dotnet run --project toolset/tools/ToolSetGenerator/ToolSetGenerator.csproj `
             -c Release --nologo -- `
             --catalog toolset/contracts/tool-contracts.json `
@@ -40,8 +40,20 @@ jobs:
           dotnet run --project toolset/tests/RevitAi.Engine.SmokeTests/RevitAi.Engine.SmokeTests.csproj `
             -c Release --nologo -- `
             --external toolset/contracts/external-tools.json `
-            --tool-index (Join-Path $env:RUNNER_TEMP 'generated/tool-index.json')
+            --tool-index (Join-Path $env:TEMP 'revitai-engine/generated/tool-index.json')
           if ($LASTEXITCODE -ne 0) { throw "smoke tests failed" }
+
+  bridge-protocol:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet run --project tests/Bridge.Protocol.Tests -c Release
+      - run: dotnet build src/RevitAi.McpServer -c Release
+      - shell: pwsh
+        run: ./tests/mcp-forwarding.ps1
 
   docs:
     name: catalog and json validation

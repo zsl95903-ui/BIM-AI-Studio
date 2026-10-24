@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using BimAi.Protocol;
 using System.Diagnostics;
 using System.IO.Pipes;
 using System.Text;
@@ -10,7 +12,9 @@ using System.Text.Json.Nodes;
 // JSON requests and never touches Revit directly.
 
 var bridgePipe = Environment.GetEnvironmentVariable("REVIT_AI_BRIDGE_PIPE");
-var serverVersion = "2.1.0-lean";
+var serverVersion = "3.0.0";
+var pending = new ConcurrentDictionary<string, CancellationTokenSource>();
+var tasks = new List<Task>();
 
 string? line;
 while ((line = await Console.In.ReadLineAsync()) is not null)
@@ -58,8 +62,10 @@ while ((line = await Console.In.ReadLineAsync()) is not null)
             });
             break;
 
-        case "notifications/initialized":
+        case "notifications/initialized": break;
         case "notifications/cancelled":
+            var cancelledId = request["params"]?["requestId"]?.ToJsonString();
+            if (cancelledId is not null && pending.TryGetValue(cancelledId, out var cancellation)) cancellation.Cancel();
             break;
 
         case "ping":
@@ -67,7 +73,8 @@ while ((line = await Console.In.ReadLineAsync()) is not null)
             break;
 
         case "tools/list":
-            var toolStatus = await SendAsync(bridgePipe, new JsonObject
+            var catalogPipe = await ResolveLivePipeAsync(bridgePipe, CancellationToken.None);
+            var toolStatus = catalogPipe is null ? "{}" : await SendAsync(catalogPipe, new JsonObject
             {
                 ["type"] = "agent.status"
             });
@@ -75,7 +82,11 @@ while ((line = await Console.In.ReadLineAsync()) is not null)
             break;
 
         case "tools/call":
-            await HandleToolCallAsync(request, id, bridgePipe);
+            var key = id?.ToJsonString() ?? Guid.NewGuid().ToString("N");
+            var source = new CancellationTokenSource();
+            if (!pending.TryAdd(key, source)) { RespondError(id!, -32600, "Duplicate active JSON-RPC id."); source.Dispose(); break; }
+            tasks.RemoveAll(task => task.IsCompleted);
+            tasks.Add(RunCallAsync(request, id, bridgePipe, key, source, pending));
             break;
 
         default:
@@ -88,12 +99,15 @@ while ((line = await Console.In.ReadLineAsync()) is not null)
     }
 }
 
+await Task.WhenAll(tasks);
 return 0;
 
 static JsonArray BuildTools(string? statusJson = null)
 {
     var tools = new JsonArray
     {
+        Tool("revit_request_status", "Read the final outcome of an earlier request before retrying a mutation.", new JsonObject { ["properties"] = new JsonObject { ["requestId"] = new JsonObject { ["type"] = "string" } }, ["required"] = new JsonArray("requestId") }),
+        Tool("revit_cancel_request", "Request cancellation of a queued/running request; committed work is preserved.", new JsonObject { ["properties"] = new JsonObject { ["requestId"] = new JsonObject { ["type"] = "string" } }, ["required"] = new JsonArray("requestId") }),
         Tool(
             "revit_status",
             "返回当前 Revit 会话状态（连接状态、模型、工具数量、技能数量）。",
@@ -118,7 +132,8 @@ static JsonArray BuildTools(string? statusJson = null)
                     {
                         ["type"] = "object",
                         ["description"] = "工具参数（键值对）"
-                    }
+                    },
+                    ["expectedDocumentGuid"] = new JsonObject { ["type"] = "string", ["description"] = "Target document GUID; otherwise capture the current document before dispatch." }
                 },
                 ["required"] = new JsonArray("tool")
             }),
@@ -195,23 +210,9 @@ static JsonArray BuildTools(string? statusJson = null)
 
 static JsonObject Tool(string name, string description, JsonObject schema)
 {
-    // JsonNode instances cannot be attached to two parents, so clone the
-    // schema fragments before moving them into the tool definition.
-    var properties = schema["properties"]?.DeepClone() as JsonObject
-        ?? new JsonObject();
-    var inputSchema = new JsonObject
-    {
-        ["type"] = "object",
-        ["properties"] = properties
-    };
-    if (schema["additionalProperties"] is JsonValue additionalProperties)
-    {
-        inputSchema["additionalProperties"] = additionalProperties.DeepClone();
-    }
-    if (schema["required"] is JsonArray required && required.Count > 0)
-    {
-        inputSchema["required"] = required.DeepClone();
-    }
+    var inputSchema = schema.DeepClone().AsObject();
+    inputSchema["type"] ??= "object";
+    inputSchema["properties"] ??= new JsonObject();
 
     return new JsonObject
     {
@@ -224,15 +225,24 @@ static JsonObject Tool(string name, string description, JsonObject schema)
 static async Task HandleToolCallAsync(
     JsonObject request,
     JsonNode? id,
-    string? configuredPipe)
+    string? configuredPipe, CancellationToken cancellationToken = default)
 {
     var parameters = request["params"]?.AsObject();
     var name = parameters?["name"]?.GetValue<string>() ?? string.Empty;
     var arguments = parameters?["arguments"]?.AsObject();
 
+    var selectedPipe = await ResolveLivePipeAsync(configuredPipe, cancellationToken);
+    if (selectedPipe is null) { Respond(id, ToolResult("No ready bridge. Select a host with REVIT_AI_BRIDGE_PIPE or REVIT_AI_PROCESS_ID.", true)); return; }
+    configuredPipe = selectedPipe;
     JsonObject bridgeRequest;
     switch (name)
     {
+        case "revit_request_status":
+        case "revit_cancel_request":
+            var operation = new JsonObject { ["type"] = name == "revit_request_status" ? "request.status" : "request.cancel", ["requestId"] = arguments?["requestId"]?.GetValue<string>() };
+            var operationResult = await SendAsync(selectedPipe, operation, cancellationToken);
+            Respond(id, ToolResult(operationResult, IsError(operationResult)));
+            return;
         case "revit_status":
             bridgeRequest = new JsonObject { ["type"] = "agent.status" };
             break;
@@ -254,16 +264,31 @@ static async Task HandleToolCallAsync(
             break;
 
         default:
+            var wrapper = name == "revit_invoke_tool";
             bridgeRequest = new JsonObject
             {
                 ["type"] = "invoke",
-                ["tool"] = arguments?["tool"]?.GetValue<string>() ?? name,
-                ["arguments"] = arguments?["arguments"]?.DeepClone() ?? new JsonObject()
+                ["tool"] = wrapper ? arguments?["tool"]?.GetValue<string>() ?? "" : name,
+                ["arguments"] = wrapper ? arguments?["arguments"]?.DeepClone() ?? new JsonObject() : arguments?.DeepClone() ?? new JsonObject()
             };
+            var targetDocument = wrapper ? arguments?["expectedDocumentGuid"]?.GetValue<string>() : null;
+            targetDocument ??= Environment.GetEnvironmentVariable("REVIT_AI_DOCUMENT_GUID");
+            if (targetDocument is null && bridgeRequest["tool"]?.GetValue<string>() != "get_document_snapshot")
+            {
+                var snapshot = JsonNode.Parse(await SendAsync(selectedPipe, new JsonObject { ["type"] = "invoke", ["tool"] = "get_document_snapshot", ["arguments"] = new JsonObject(), ["requestId"] = Guid.NewGuid().ToString("N") }, cancellationToken));
+                targetDocument = snapshot?["payload"]?["documentGuid"]?.GetValue<string>();
+                if (string.IsNullOrWhiteSpace(targetDocument)) { Respond(id, ToolResult(snapshot?.ToJsonString() ?? "Cannot bind document.", true)); return; }
+            }
+            if (targetDocument is not null) bridgeRequest["expectedDocumentGuid"] = targetDocument;
             break;
     }
 
-    var response = await SendAsync(configuredPipe, bridgeRequest);
+    var bridgeId = Guid.NewGuid().ToString("N");
+    bridgeRequest["requestId"] = bridgeId;
+    bridgeRequest["hostId"] = selectedPipe;
+    bridgeRequest["protocolVersion"] = BridgeProtocol.Version;
+    using var registration = cancellationToken.Register(() => { _ = SendAsync(selectedPipe, new JsonObject { ["type"] = "request.cancel", ["requestId"] = bridgeId }); });
+    var response = await SendAsync(configuredPipe, bridgeRequest, cancellationToken);
     Respond(id, ToolResult(response, IsError(response)));
 }
 
@@ -331,7 +356,7 @@ static bool IsError(string responseJson)
     }
 }
 
-static async Task<string> SendAsync(string? configuredPipe, JsonObject request)
+static async Task<string> SendAsync(string? configuredPipe, JsonObject request, CancellationToken cancellationToken = default)
 {
     var pipeName = ResolvePipeName(configuredPipe);
     if (string.IsNullOrWhiteSpace(pipeName))
@@ -350,7 +375,8 @@ static async Task<string> SendAsync(string? configuredPipe, JsonObject request)
             pipeName,
             PipeDirection.InOut,
             PipeOptions.Asynchronous);
-        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(10));
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromMinutes(10));
         await pipe.ConnectAsync(15000, timeout.Token);
         using var reader = new StreamReader(pipe, Encoding.UTF8, leaveOpen: true);
         await using var writer = new StreamWriter(
@@ -360,7 +386,8 @@ static async Task<string> SendAsync(string? configuredPipe, JsonObject request)
         {
             AutoFlush = true
         };
-        await writer.WriteLineAsync(request.ToJsonString());
+        timeout.Token.ThrowIfCancellationRequested();
+        await writer.WriteLineAsync(request.ToJsonString().AsMemory(), timeout.Token);
         var response = await reader.ReadLineAsync(timeout.Token);
         return response ?? JsonSerializer.Serialize(new
         {
@@ -373,7 +400,10 @@ static async Task<string> SendAsync(string? configuredPipe, JsonObject request)
         return JsonSerializer.Serialize(new
         {
             success = false,
-            error = $"Revit 桥接调用失败: {ex.GetBaseException().Message}"
+            errorCode = ex is OperationCanceledException ? "outcome_unknown" : "bridge_unavailable",
+            requestId = request["requestId"]?.GetValue<string>(),
+            hostId = configuredPipe,
+            error = $"Bridge result unavailable; query request.status before retrying a mutation: {ex.GetBaseException().Message}"
         });
     }
 }
@@ -446,12 +476,58 @@ static void RespondError(JsonNode id, int code, string message)
 
 static void WriteLine(JsonObject payload)
 {
-    Console.Out.WriteLine(payload.ToJsonString());
-    Console.Out.Flush();
+    lock (Console.Out)
+    {
+        Console.Out.WriteLine(payload.ToJsonString());
+        Console.Out.Flush();
+    }
 }
 
 static void Log(string message)
 {
     // stdout is reserved for JSON-RPC; diagnostics go to stderr.
     Console.Error.WriteLine($"[revit-ai-mcp] {message}");
+}
+
+static async Task RunCallAsync(JsonObject request, JsonNode? id, string? pipe, string key, CancellationTokenSource source, ConcurrentDictionary<string, CancellationTokenSource> pending)
+{
+    try { await HandleToolCallAsync(request, id, pipe, source.Token); }
+    catch (OperationCanceledException) { Respond(id, ToolResult("Cancelled before dispatch.", true)); }
+    catch (Exception ex) { Respond(id, ToolResult(ex.GetBaseException().Message, true)); }
+    finally { pending.TryRemove(key, out _); source.Dispose(); }
+}
+
+static async Task<string?> ResolveLivePipeAsync(string? configuredPipe, CancellationToken token)
+{
+    if (!string.IsNullOrWhiteSpace(configuredPipe)) return configuredPipe;
+    var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RevitAi");
+    var candidates = new List<(string Pipe, int Pid)>();
+    var selectedPid = Environment.GetEnvironmentVariable("REVIT_AI_PROCESS_ID");
+    if (!Directory.Exists(directory)) return null;
+    foreach (var file in Directory.EnumerateFiles(directory, "*bridge*.json"))
+    {
+        try
+        {
+            var node = JsonNode.Parse(File.ReadAllText(file));
+            var pipe = node?["pipeName"]?.GetValue<string>();
+            var pid = node?["processId"]?.GetValue<int>() ?? 0;
+            if (string.IsNullOrEmpty(pipe) || selectedPid is not null && selectedPid != pid.ToString()) continue;
+            using var process = Process.GetProcessById(pid);
+            if (!process.HasExited) candidates.Add((pipe, pid));
+        }
+        catch { /* An invalid/stale file must not hide another live host. */ }
+    }
+    if (candidates.Select(c => c.Pid).Distinct().Count() > 1) throw new InvalidOperationException("Multiple Revit processes found; set REVIT_AI_PROCESS_ID or REVIT_AI_BRIDGE_PIPE.");
+    foreach (var candidate in candidates.Distinct())
+    {
+        using var probe = CancellationTokenSource.CreateLinkedTokenSource(token);
+        probe.CancelAfter(TimeSpan.FromSeconds(2));
+        var status = await SendAsync(candidate.Pipe, new JsonObject { ["type"] = "agent.status" }, probe.Token);
+        try
+        {
+            if (JsonNode.Parse(status)?["status"]?["toolsReady"]?.GetValue<bool>() == true) return candidate.Pipe;
+        }
+        catch { }
+    }
+    return null;
 }

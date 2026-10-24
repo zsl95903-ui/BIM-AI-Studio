@@ -24,7 +24,7 @@ if (Test-Path -LiteralPath $out) { Remove-Item -LiteralPath $out -Recurse -Force
 New-Item -ItemType Directory -Path $out -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $out "docs") -Force | Out-Null
 
-Copy-Item -Path (Join-Path $bin "ReVitAI.Bridge.dll") -Destination $out -Force
+Copy-Item -Path (Join-Path $bin "*.dll") -Destination $out -Force
 Copy-Item -Path (Join-Path $bin "ReVitAI.Bridge.deps.json") -Destination $out -Force
 Copy-Item -Path (Join-Path $root "installer\ReVitAI.Bridge.addin") -Destination $out -Force
 Copy-Item -Path (Join-Path $root "installer\install.ps1") -Destination $out -Force
@@ -67,9 +67,10 @@ $sbom = [ordered]@{
 $sbom | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $out "sbom.cdx.json") -Encoding utf8
 
 $distributedAssemblies = @(Get-ChildItem -LiteralPath $out -Recurse -File -Filter "*.dll")
-if ($distributedAssemblies.Count -ne 1 -or $distributedAssemblies[0].Name -ne "ReVitAI.Bridge.dll") {
-    throw "Core release must contain exactly one distributed assembly: ReVitAI.Bridge.dll."
+if ($distributedAssemblies.Name -contains "RevitAPI.dll" -or $distributedAssemblies.Name -contains "RevitAPIUI.dll") {
+    throw "Autodesk API assemblies must not be redistributed."
 }
+if ($distributedAssemblies.Name -notcontains "ExtToolLib.dll" -or $distributedAssemblies.Name -notcontains "RevitAi.Engine.Revit.dll") { throw "Unified tool runtime dependencies are missing." }
 
 Compress-Archive -Path (Join-Path $out "*") -DestinationPath $zip -Force
 $hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()

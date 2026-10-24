@@ -14,11 +14,14 @@ $obj = (Join-Path $buildRoot "obj") + [IO.Path]::DirectorySeparatorChar
 $bin = (Join-Path $buildRoot "bin") + [IO.Path]::DirectorySeparatorChar
 New-Item -ItemType Directory -Force -Path $obj, $bin | Out-Null
 
-$restoreArgs = @("restore", $project, "-p:BaseIntermediateOutputPath=$obj", "-p:OutputPath=$bin", "--force", "--no-cache")
+& (Join-Path $root "toolset\build.ps1") -SkipTests
+if ($LASTEXITCODE -ne 0) { throw "Toolset generation/build failed." }
+
+$restoreArgs = @("restore", $project, "-p:OutputPath=$bin", "--force", "--no-cache")
 & dotnet @restoreArgs
 if ($LASTEXITCODE -ne 0) { throw "ReVitAI Bridge restore failed." }
 
-$buildArgs = @("build", $project, "-c", "Release", "--no-restore", "-p:BaseIntermediateOutputPath=$obj", "-p:OutputPath=$bin", "-p:RevitApiDir=$RevitApiDir")
+$buildArgs = @("build", $project, "-c", "Release", "--no-restore", "-p:OutputPath=$bin", "-p:RevitApiDir=$RevitApiDir")
 & dotnet @buildArgs
 if ($LASTEXITCODE -ne 0) { throw "ReVitAI Bridge build failed." }
 

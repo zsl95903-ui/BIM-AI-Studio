@@ -1,0 +1,1483 @@
+[
+  {
+    "name": "ping",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "dryRun": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "additionalProperties": true,
+      "description": "Specialized Revit drawing tool. Geometry coordinates and lengths use millimetres unless a field explicitly states metres. Additional properties preserve historical aliases; unknown fields are not a substitute for documented parameters."
+    }
+  },
+  {
+    "name": "get_document_info",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "dryRun": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "additionalProperties": true,
+      "description": "Specialized Revit drawing tool. Geometry coordinates and lengths use millimetres unless a field explicitly states metres. Additional properties preserve historical aliases; unknown fields are not a substitute for documented parameters."
+    }
+  },
+  {
+    "name": "get_document_snapshot",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "dryRun": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "additionalProperties": true,
+      "description": "Specialized Revit drawing tool. Geometry coordinates and lengths use millimetres unless a field explicitly states metres. Additional properties preserve historical aliases; unknown fields are not a substitute for documented parameters."
+    }
+  },
+  {
+    "name": "get_wall_types",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "dryRun": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "additionalProperties": true,
+      "description": "Specialized Revit drawing tool. Geometry coordinates and lengths use millimetres unless a field explicitly states metres. Additional properties preserve historical aliases; unknown fields are not a substitute for documented parameters."
+    }
+  },
+  {
+    "name": "get_floor_types",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "dryRun": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "additionalProperties": true,
+      "description": "Specialized Revit drawing tool. Geometry coordinates and lengths use millimetres unless a field explicitly states metres. Additional properties preserve historical aliases; unknown fields are not a substitute for documented parameters."
+    }
+  },
+  {
+    "name": "get_view_settings",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "viewId": {
+          "type": "integer"
+        },
+        "viewName": {
+          "type": "string"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "additionalProperties": true,
+      "description": "Specialized Revit drawing tool. Geometry coordinates and lengths use millimetres unless a field explicitly states metres. Additional properties preserve historical aliases; unknown fields are not a substitute for documented parameters."
+    }
+  },
+  {
+    "name": "hide_elements_in_view",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "hide": {
+          "type": "boolean"
+        },
+        "viewId": {
+          "type": "integer"
+        },
+        "viewName": {
+          "type": "string"
+        },
+        "elementIds": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "additionalProperties": true,
+      "description": "Specialized Revit drawing tool. Geometry coordinates and lengths use millimetres unless a field explicitly states metres. Additional properties preserve historical aliases; unknown fields are not a substitute for documented parameters."
+    }
+  },
+  {
+    "name": "export_view_image",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "outputDirectory": {
+          "type": "string"
+        },
+        "exportDirectory": {
+          "type": "string"
+        },
+        "fileName": {
+          "type": "string"
+        },
+        "filePath": {
+          "type": "string"
+        },
+        "width": {
+          "type": "integer"
+        },
+        "viewId": {
+          "type": "integer"
+        },
+        "viewName": {
+          "type": "string"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "additionalProperties": true,
+      "description": "Specialized Revit drawing tool. Geometry coordinates and lengths use millimetres unless a field explicitly states metres. Additional properties preserve historical aliases; unknown fields are not a substitute for documented parameters."
+    }
+  },
+  {
+    "name": "save_document",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "filePath": {
+          "type": "string"
+        },
+        "savePath": {
+          "type": "string"
+        },
+        "overwrite": {
+          "type": "boolean"
+        },
+        "maximumBackups": {
+          "type": "integer"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "additionalProperties": true,
+      "description": "Specialized Revit drawing tool. Geometry coordinates and lengths use millimetres unless a field explicitly states metres. Additional properties preserve historical aliases; unknown fields are not a substitute for documented parameters."
+    }
+  },
+  {
+    "name": "save_document_as",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "filePath": {
+          "type": "string"
+        },
+        "savePath": {
+          "type": "string"
+        },
+        "overwrite": {
+          "type": "boolean"
+        },
+        "maximumBackups": {
+          "type": "integer"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "additionalProperties": true,
+      "description": "Specialized Revit drawing tool. Geometry coordinates and lengths use millimetres unless a field explicitly states metres. Additional properties preserve historical aliases; unknown fields are not a substitute for documented parameters."
+    }
+  },
+  {
+    "name": "upsert_level",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "levelName": {
+          "type": "string"
+        },
+        "elevation": {
+          "type": "number",
+          "description": "Elevation in metres"
+        },
+        "elevationMeters": {
+          "type": "number"
+        },
+        "updateExisting": {
+          "type": "boolean"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "additionalProperties": true,
+      "anyOf": [
+        {
+          "required": [
+            "elevation"
+          ]
+        },
+        {
+          "required": [
+            "elevationMeters"
+          ]
+        }
+      ],
+      "description": "Specialized Revit drawing tool. Geometry coordinates and lengths use millimetres unless a field explicitly states metres. Additional properties preserve historical aliases; unknown fields are not a substitute for documented parameters."
+    }
+  },
+  {
+    "name": "set_level_head_text_size",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "sizeMm": {
+          "type": "number"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "additionalProperties": true,
+      "description": "Specialized Revit drawing tool. Geometry coordinates and lengths use millimetres unless a field explicitly states metres. Additional properties preserve historical aliases; unknown fields are not a substitute for documented parameters."
+    }
+  },
+  {
+    "name": "set_level_line_pattern",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "patternId": {
+          "type": "integer"
+        },
+        "patternName": {
+          "type": "string"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "additionalProperties": true,
+      "description": "Specialized Revit drawing tool. Geometry coordinates and lengths use millimetres unless a field explicitly states metres. Additional properties preserve historical aliases; unknown fields are not a substitute for documented parameters."
+    }
+  },
+  {
+    "name": "create_wall_with_openings",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "heightMm": {
+          "type": "number"
+        },
+        "height": {
+          "type": "number"
+        },
+        "flip": {
+          "type": "boolean"
+        },
+        "structural": {
+          "type": "boolean"
+        },
+        "openings": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "levelId": {
+          "type": "integer"
+        },
+        "levelName": {
+          "type": "string"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "additionalProperties": true,
+      "description": "Specialized Revit drawing tool. Geometry coordinates and lengths use millimetres unless a field explicitly states metres. Additional properties preserve historical aliases; unknown fields are not a substitute for documented parameters."
+    }
+  },
+  {
+    "name": "create_boxes",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "boxes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "position": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  },
+                  "z": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "x",
+                  "y"
+                ],
+                "description": "Coordinates in millimetres."
+              },
+              "widthMm": {
+                "type": "number"
+              },
+              "depthMm": {
+                "type": "number"
+              },
+              "heightMm": {
+                "type": "number"
+              },
+              "rotationDegrees": {
+                "type": "number"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "position"
+            ]
+          },
+          "minItems": 1
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "boxes"
+      ],
+      "additionalProperties": true,
+      "description": "Specialized Revit drawing tool. Geometry coordinates and lengths use millimetres unless a field explicitly states metres. Additional properties preserve historical aliases; unknown fields are not a substitute for documented parameters."
+    }
+  },
+  {
+    "name": "create_structural_column",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "position": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "z": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "description": "Coordinates in millimetres."
+        },
+        "widthMm": {
+          "type": "number"
+        },
+        "width": {
+          "type": "number"
+        },
+        "depthMm": {
+          "type": "number"
+        },
+        "depth": {
+          "type": "number"
+        },
+        "heightMm": {
+          "type": "number"
+        },
+        "height": {
+          "type": "number"
+        },
+        "rotationDegrees": {
+          "type": "number"
+        },
+        "rotation": {
+          "type": "number"
+        },
+        "name": {
+          "type": "string"
+        },
+        "mark": {
+          "type": "string"
+        },
+        "familyTypeId": {
+          "type": "integer"
+        },
+        "family_type_id": {
+          "type": "integer"
+        },
+        "levelId": {
+          "type": "integer"
+        },
+        "levelName": {
+          "type": "string"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "position"
+      ],
+      "additionalProperties": true,
+      "description": "Specialized Revit drawing tool. Geometry coordinates and lengths use millimetres unless a field explicitly states metres. Additional properties preserve historical aliases; unknown fields are not a substitute for documented parameters."
+    }
+  },
+  {
+    "name": "create_structural_beam",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "z": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "description": "Coordinates in millimetres."
+        },
+        "end": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "z": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "description": "Coordinates in millimetres."
+        },
+        "beamWidthMm": {
+          "type": "number"
+        },
+        "widthMm": {
+          "type": "number"
+        },
+        "width": {
+          "type": "number"
+        },
+        "beamHeightMm": {
+          "type": "number"
+        },
+        "heightMm": {
+          "type": "number"
+        },
+        "height": {
+          "type": "number"
+        },
+        "name": {
+          "type": "string"
+        },
+        "mark": {
+          "type": "string"
+        },
+        "familyTypeId": {
+          "type": "integer"
+        },
+        "family_type_id": {
+          "type": "integer"
+        },
+        "levelId": {
+          "type": "integer"
+        },
+        "levelName": {
+          "type": "string"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "additionalProperties": true,
+      "description": "Specialized Revit drawing tool. Geometry coordinates and lengths use millimetres unless a field explicitly states metres. Additional properties preserve historical aliases; unknown fields are not a substitute for documented parameters."
+    }
+  },
+  {
+    "name": "load_family",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "filePath": {
+          "type": "string"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "additionalProperties": true,
+      "anyOf": [
+        {
+          "required": [
+            "path"
+          ]
+        },
+        {
+          "required": [
+            "filePath"
+          ]
+        }
+      ],
+      "description": "Specialized Revit drawing tool. Geometry coordinates and lengths use millimetres unless a field explicitly states metres. Additional properties preserve historical aliases; unknown fields are not a substitute for documented parameters."
+    }
+  },
+  {
+    "name": "create_door",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "familyTypeId": {
+          "type": "integer"
+        },
+        "family_type_id": {
+          "type": "integer"
+        },
+        "hostId": {
+          "type": "integer"
+        },
+        "wallId": {
+          "type": "integer"
+        },
+        "wall_id": {
+          "type": "integer"
+        },
+        "position": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "z": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "description": "Coordinates in millimetres."
+        },
+        "name": {
+          "type": "string"
+        },
+        "mark": {
+          "type": "string"
+        },
+        "levelId": {
+          "type": "integer"
+        },
+        "levelName": {
+          "type": "string"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "position"
+      ],
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "anyOf": [
+            {
+              "required": [
+                "hostId"
+              ]
+            },
+            {
+              "required": [
+                "wallId"
+              ]
+            },
+            {
+              "required": [
+                "wall_id"
+              ]
+            }
+          ]
+        },
+        {
+          "anyOf": [
+            {
+              "required": [
+                "familyTypeId"
+              ]
+            },
+            {
+              "required": [
+                "family_type_id"
+              ]
+            }
+          ]
+        }
+      ],
+      "description": "Specialized Revit drawing tool. Geometry coordinates and lengths use millimetres unless a field explicitly states metres. Additional properties preserve historical aliases; unknown fields are not a substitute for documented parameters."
+    }
+  },
+  {
+    "name": "create_window",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "familyTypeId": {
+          "type": "integer"
+        },
+        "family_type_id": {
+          "type": "integer"
+        },
+        "hostId": {
+          "type": "integer"
+        },
+        "wallId": {
+          "type": "integer"
+        },
+        "wall_id": {
+          "type": "integer"
+        },
+        "position": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "z": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "description": "Coordinates in millimetres."
+        },
+        "name": {
+          "type": "string"
+        },
+        "mark": {
+          "type": "string"
+        },
+        "levelId": {
+          "type": "integer"
+        },
+        "levelName": {
+          "type": "string"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "position"
+      ],
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "anyOf": [
+            {
+              "required": [
+                "hostId"
+              ]
+            },
+            {
+              "required": [
+                "wallId"
+              ]
+            },
+            {
+              "required": [
+                "wall_id"
+              ]
+            }
+          ]
+        },
+        {
+          "anyOf": [
+            {
+              "required": [
+                "familyTypeId"
+              ]
+            },
+            {
+              "required": [
+                "family_type_id"
+              ]
+            }
+          ]
+        }
+      ],
+      "description": "Specialized Revit drawing tool. Geometry coordinates and lengths use millimetres unless a field explicitly states metres. Additional properties preserve historical aliases; unknown fields are not a substitute for documented parameters."
+    }
+  },
+  {
+    "name": "import_pdf_underlay",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "filePath": {
+          "type": "string"
+        },
+        "pageNumber": {
+          "type": "integer"
+        },
+        "page": {
+          "type": "integer"
+        },
+        "resolution": {
+          "type": "integer"
+        },
+        "useRelativePath": {
+          "type": "boolean"
+        },
+        "sourceType": {
+          "type": "string"
+        },
+        "location": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "z": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "description": "Coordinates in millimetres."
+        },
+        "widthMm": {
+          "type": "number"
+        },
+        "width": {
+          "type": "number"
+        },
+        "heightMm": {
+          "type": "number"
+        },
+        "height": {
+          "type": "number"
+        },
+        "rotationDegrees": {
+          "type": "number"
+        },
+        "viewId": {
+          "type": "integer"
+        },
+        "viewName": {
+          "type": "string"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "additionalProperties": true,
+      "anyOf": [
+        {
+          "required": [
+            "path"
+          ]
+        },
+        {
+          "required": [
+            "filePath"
+          ]
+        }
+      ],
+      "description": "Specialized Revit drawing tool. Geometry coordinates and lengths use millimetres unless a field explicitly states metres. Additional properties preserve historical aliases; unknown fields are not a substitute for documented parameters."
+    }
+  },
+  {
+    "name": "create_detail_curves",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "curves": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "start": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  },
+                  "z": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "x",
+                  "y"
+                ],
+                "description": "Coordinates in millimetres."
+              },
+              "end": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  },
+                  "z": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "x",
+                  "y"
+                ],
+                "description": "Coordinates in millimetres."
+              },
+              "center": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  },
+                  "z": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "x",
+                  "y"
+                ],
+                "description": "Coordinates in millimetres."
+              },
+              "mid": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  },
+                  "z": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "x",
+                  "y"
+                ],
+                "description": "Coordinates in millimetres."
+              },
+              "points": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "number"
+                    },
+                    "y": {
+                      "type": "number"
+                    },
+                    "z": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y"
+                  ],
+                  "description": "Coordinates in millimetres."
+                }
+              },
+              "radiusMm": {
+                "type": "number"
+              },
+              "startAngleDegrees": {
+                "type": "number"
+              },
+              "endAngleDegrees": {
+                "type": "number"
+              },
+              "lineStyleId": {
+                "type": "integer"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "line",
+                  "arc",
+                  "arc_center",
+                  "arc_three_point",
+                  "polyline"
+                ]
+              }
+            },
+            "additionalProperties": true
+          },
+          "minItems": 1
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "start": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  },
+                  "z": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "x",
+                  "y"
+                ],
+                "description": "Coordinates in millimetres."
+              },
+              "end": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  },
+                  "z": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "x",
+                  "y"
+                ],
+                "description": "Coordinates in millimetres."
+              },
+              "center": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  },
+                  "z": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "x",
+                  "y"
+                ],
+                "description": "Coordinates in millimetres."
+              },
+              "mid": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  },
+                  "z": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "x",
+                  "y"
+                ],
+                "description": "Coordinates in millimetres."
+              },
+              "points": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "number"
+                    },
+                    "y": {
+                      "type": "number"
+                    },
+                    "z": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y"
+                  ],
+                  "description": "Coordinates in millimetres."
+                }
+              },
+              "radiusMm": {
+                "type": "number"
+              },
+              "startAngleDegrees": {
+                "type": "number"
+              },
+              "endAngleDegrees": {
+                "type": "number"
+              },
+              "lineStyleId": {
+                "type": "integer"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "line",
+                  "arc",
+                  "arc_center",
+                  "arc_three_point",
+                  "polyline"
+                ]
+              }
+            },
+            "additionalProperties": true
+          },
+          "minItems": 1
+        },
+        "viewId": {
+          "type": "integer"
+        },
+        "viewName": {
+          "type": "string"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "additionalProperties": true,
+      "anyOf": [
+        {
+          "required": [
+            "curves"
+          ]
+        },
+        {
+          "required": [
+            "lines"
+          ]
+        }
+      ],
+      "description": "Specialized Revit drawing tool. Geometry coordinates and lengths use millimetres unless a field explicitly states metres. Additional properties preserve historical aliases; unknown fields are not a substitute for documented parameters."
+    }
+  },
+  {
+    "name": "create_text_notes",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "notes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              },
+              "position": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  },
+                  "z": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "x",
+                  "y"
+                ],
+                "description": "Coordinates in millimetres."
+              },
+              "textTypeId": {
+                "type": "integer"
+              },
+              "widthMm": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "position"
+            ],
+            "anyOf": [
+              {
+                "required": [
+                  "text"
+                ]
+              },
+              {
+                "required": [
+                  "content"
+                ]
+              }
+            ]
+          }
+        },
+        "text": {
+          "type": "string"
+        },
+        "viewId": {
+          "type": "integer"
+        },
+        "viewName": {
+          "type": "string"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "additionalProperties": true,
+      "anyOf": [
+        {
+          "required": [
+            "notes"
+          ]
+        },
+        {
+          "required": [
+            "text"
+          ]
+        }
+      ],
+      "description": "Specialized Revit drawing tool. Geometry coordinates and lengths use millimetres unless a field explicitly states metres. Additional properties preserve historical aliases; unknown fields are not a substitute for documented parameters."
+    }
+  },
+  {
+    "name": "fit_view_crop_to_elements",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "marginMm": {
+          "type": "number"
+        },
+        "margin": {
+          "type": "number"
+        },
+        "viewId": {
+          "type": "integer"
+        },
+        "viewName": {
+          "type": "string"
+        },
+        "elementIds": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "additionalProperties": true,
+      "description": "Specialized Revit drawing tool. Geometry coordinates and lengths use millimetres unless a field explicitly states metres. Additional properties preserve historical aliases; unknown fields are not a substitute for documented parameters."
+    }
+  },
+  {
+    "name": "apply_drawing_plan",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "viewId": {
+          "type": "integer"
+        },
+        "viewName": {
+          "type": "string"
+        },
+        "activateView": {
+          "type": "boolean"
+        },
+        "autoZoom": {
+          "type": "boolean"
+        },
+        "stopOnError": {
+          "type": "boolean"
+        },
+        "fitCropToCreated": {
+          "type": "boolean"
+        },
+        "cropMarginMm": {
+          "type": "number"
+        },
+        "ops": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "create_grids",
+                  "create_level",
+                  "create_straight_wall",
+                  "create_wall_with_openings",
+                  "create_floor_by_profile",
+                  "create_boxes",
+                  "create_structural_column",
+                  "create_structural_beam",
+                  "create_room",
+                  "delete_elements",
+                  "load_family",
+                  "create_door",
+                  "create_window",
+                  "import_pdf_underlay",
+                  "create_detail_lines",
+                  "create_detail_curves",
+                  "create_text_notes",
+                  "set_level_line_pattern",
+                  "set_element_color",
+                  "move_elements",
+                  "rotate_elements",
+                  "create_dimensions",
+                  "zoom_to_elements",
+                  "set_color",
+                  "rotate_element"
+                ]
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "ops"
+      ],
+      "additionalProperties": true,
+      "description": "Specialized Revit drawing tool. Geometry coordinates and lengths use millimetres unless a field explicitly states metres. Additional properties preserve historical aliases; unknown fields are not a substitute for documented parameters."
+    }
+  },
+  {
+    "name": "batch",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "properties": {
+              "tool": {
+                "type": "string"
+              },
+              "arguments": {
+                "type": "object"
+              }
+            },
+            "required": [
+              "tool"
+            ]
+          }
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "steps"
+      ],
+      "additionalProperties": true,
+      "description": "Specialized Revit drawing tool. Geometry coordinates and lengths use millimetres unless a field explicitly states metres. Additional properties preserve historical aliases; unknown fields are not a substitute for documented parameters."
+    }
+  }
+]

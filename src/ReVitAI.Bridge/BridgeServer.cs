@@ -1,3 +1,5 @@
+using BimAi.Protocol;
+using System.Text.Json.Nodes;
 using System.Diagnostics;
 using System.IO.Pipes;
 using System.Text;
@@ -9,6 +11,7 @@ namespace ReVitAI.Bridge;
 internal sealed class BridgeServer : IAsyncDisposable
 {
     private readonly ToolDispatcher _dispatcher;
+    private readonly RequestJournal _journal = new();
     private readonly ExternalEventInvoker _invoker;
     private readonly CancellationTokenSource _shutdown = new();
     private Task? _acceptLoop;
@@ -136,7 +139,23 @@ internal sealed class BridgeServer : IAsyncDisposable
         }
     }
 
-    private async Task<object> ProcessRequestAsync(
+    private async Task<object> ProcessRequestAsync(JsonElement request, CancellationToken cancellationToken)
+    {
+        var type = Json.String(request, "type") ?? "invoke";
+        var id = Json.String(request, "requestId") ?? Guid.NewGuid().ToString("N");
+        if (type == "request.cancel") return _journal.Cancel(id);
+        if (type == "request.status") return _journal.Status(id);
+        var hostId = Json.String(request, "hostId");
+        if (hostId is not null && hostId != PipeName) return BridgeProtocol.Error(id, "host_mismatch", "The target host changed.");
+        var version = Json.String(request, "protocolVersion");
+        if (version is not null && version != BridgeProtocol.Version) return BridgeProtocol.Error(id, "protocol_mismatch", "Unsupported bridge protocol version.");
+        if (type is "invoke" or "agent.chat")
+            return await _journal.ExecuteAsync(id, request.GetRawText(), async token =>
+                JsonSerializer.SerializeToNode(await ProcessCoreAsync(request, token), Json.Options)!.AsObject(), cancellationToken);
+        return await ProcessCoreAsync(request, cancellationToken);
+    }
+
+    private async Task<object> ProcessCoreAsync(
         JsonElement request,
         CancellationToken cancellationToken)
     {
@@ -241,37 +260,10 @@ internal sealed class BridgeServer : IAsyncDisposable
 
         try
         {
-            var expectedDocumentGuid = StringAny(
-                request,
-                "expectedDocumentGuid",
-                "expected_document_guid",
-                "documentGuid",
-                "document_guid");
-            if (!string.IsNullOrWhiteSpace(expectedDocumentGuid))
-            {
-                var snapshot = await _dispatcher.ExecuteAsync(
-                    _invoker,
-                    "get_document_snapshot",
-                    Json.EmptyObject()).WaitAsync(cancellationToken).ConfigureAwait(false);
-                UpdateDiscovery(snapshot);
-                var actualDocumentGuid = ReadPropertyString(snapshot, "DocumentGuid");
-                if (!string.Equals(
-                    expectedDocumentGuid,
-                    actualDocumentGuid,
-                    StringComparison.OrdinalIgnoreCase))
-                {
-                    return ErrorResponse(
-                        tool,
-                        requestId,
-                        "document_mismatch",
-                        $"目标文档不匹配。expected={expectedDocumentGuid}, actual={actualDocumentGuid ?? "<unknown>"}。为防止误绘，本次请求已拒绝。",
-                        stopwatch.Elapsed.TotalMilliseconds);
-                }
-            }
-
-            var payload = await _dispatcher.ExecuteAsync(_invoker, tool, arguments)
-                .WaitAsync(cancellationToken)
-                .ConfigureAwait(false);
+            var expectedDocumentGuid = StringAny(request, "expectedDocumentGuid", "expected_document_guid", "documentGuid", "document_guid");
+            if (_dispatcher.IsMutating(tool) && string.IsNullOrWhiteSpace(expectedDocumentGuid))
+                return BridgeProtocol.Error(requestId, "document_required", "Bind mutations to expectedDocumentGuid from get_document_snapshot.");
+            var payload = await _dispatcher.ExecuteAsync(_invoker, tool, arguments, cancellationToken, expectedDocumentGuid).ConfigureAwait(false);
             if (tool.Equals("get_document_snapshot", StringComparison.OrdinalIgnoreCase))
             {
                 UpdateDiscovery(payload);
@@ -280,6 +272,9 @@ internal sealed class BridgeServer : IAsyncDisposable
             return new
             {
                 Type = "result",
+                ProtocolVersion = BridgeProtocol.Version,
+                State = "completed",
+                HostId = PipeName,
                 RequestId = requestId,
                 Success = true,
                 Tool = tool,
@@ -295,7 +290,7 @@ internal sealed class BridgeServer : IAsyncDisposable
             return ErrorResponse(
                 tool,
                 requestId,
-                "tool_error",
+                ex is ArgumentException ? "invalid_arguments" : ex is OperationCanceledException ? "cancelled" : ex.Message.StartsWith("document_mismatch") ? "document_mismatch" : "tool_error",
                 ex.GetBaseException().Message,
                 stopwatch.Elapsed.TotalMilliseconds);
         }
@@ -374,6 +369,9 @@ internal sealed class BridgeServer : IAsyncDisposable
             Success = true,
             Status = new
             {
+                ProtocolVersion = BridgeProtocol.Version,
+                HostId = PipeName,
+                Capabilities = new[] { "tools.list", "request.cancel", "request.status", "document.binding", "request.deduplication" },
                 Configured = false,
                 ToolsReady = true,
                 Model = "deterministic-revitai-bridge",
@@ -384,7 +382,7 @@ internal sealed class BridgeServer : IAsyncDisposable
                 Rounds = 0,
                 Build = "v2.1.0-dual-host-headless",
                 ToolCount = catalog.GetType().GetProperty("Count")!.GetValue(catalog),
-                ToolSets = new[] { "ReVitAI", "2D Drawing", "PDF Underlay", "Annotations" },
+                ToolSets = _dispatcher.Tools.Select(t => t.Category).Distinct().OrderBy(t => t).ToArray(),
                 Tools = catalog.GetType().GetProperty("Tools")!.GetValue(catalog),
             },
             DurationMs = durationMs,
@@ -401,6 +399,8 @@ internal sealed class BridgeServer : IAsyncDisposable
         return new
         {
             Type = "result",
+            ProtocolVersion = BridgeProtocol.Version,
+            State = errorCode == "cancelled" ? "cancelled" : "failed",
             RequestId = requestId,
             Success = false,
             Tool = tool,
@@ -437,7 +437,9 @@ internal sealed class BridgeServer : IAsyncDisposable
             StartedAt = DateTimeOffset.UtcNow.ToString("O"),
             UpdatedAt = DateTimeOffset.UtcNow.ToString("O"),
             Server = "ReVitAI.Bridge",
-            Version = "2.1.0",
+            Version = "3.0.0",
+            ProtocolVersion = BridgeProtocol.Version,
+            HostId = PipeName,
             DocumentGuid = _lastDocumentGuid,
             DocumentTitle = _lastDocumentTitle,
             DocumentPath = _lastDocumentPath,

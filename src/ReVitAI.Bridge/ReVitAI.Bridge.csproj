@@ -21,9 +21,17 @@
     <PathMap>$(MSBuildProjectDirectory)=/_/src/ReVitAI.Bridge</PathMap>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
-    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <NoWarn>MSB3277</NoWarn>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Shared\BridgeProtocol.cs" Link="Protocol\BridgeProtocol.cs" />
+    <EmbeddedResource Include="..\..\toolset\contracts\tool-contracts.json" LogicalName="BimAi.ToolContracts.json" />
+    <EmbeddedResource Include="bridge-tool-contracts.json" LogicalName="BimAi.BridgeContracts.json" />
+    <ProjectReference Include="..\..\toolset\src\RevitAi.Engine.Revit\RevitAi.Engine.Revit.csproj" />
+    <ProjectReference Include="..\..\toolset\src\ExtToolLib.Implementations\ExtToolLib.Implementations.csproj" />
+  </ItemGroup>
 
   <ItemGroup>
     <Reference Include="RevitAPI">

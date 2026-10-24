@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true, Position = 0)]
-    [ValidateSet("ping", "tools", "schema", "invoke", "agent-status", "chat")]
+    [ValidateSet("ping", "tools", "schema", "invoke", "agent-status", "chat", "request-status", "cancel")]
     [string]$Action,
 
     [Parameter(Position = 1)]
@@ -14,7 +14,8 @@ param(
 
     [string]$PipeName,
 
-    [string]$DiscoveryPath
+    [string]$DiscoveryPath,
+    [string]$ExpectedDocumentGuid
 )
 
 $ErrorActionPreference = "Stop"
@@ -23,15 +24,19 @@ function Get-BridgeDiscoveryCandidates {
     $candidates = @()
     if (-not [string]::IsNullOrWhiteSpace($DiscoveryPath)) {
         $candidates += $DiscoveryPath
+        return $candidates
     }
 
     $candidates += Join-Path $env:LOCALAPPDATA "RevitAi\bridge.json"
     $candidates += Join-Path $env:LOCALAPPDATA "ReVitAI\revitai-bridge.json"
+    $directory = Join-Path $env:LOCALAPPDATA "RevitAi"
+    if (Test-Path -LiteralPath $directory) { $candidates += Get-ChildItem -LiteralPath $directory -Filter '*bridge*.json' -File | Select-Object -ExpandProperty FullName }
     $candidates | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
 }
 
 function Read-BridgeDiscovery {
     $stale = @()
+    $live = @()
     foreach ($candidate in Get-BridgeDiscoveryCandidates) {
         if (-not (Test-Path -LiteralPath $candidate)) {
             continue
@@ -51,13 +56,16 @@ function Read-BridgeDiscovery {
                 }
             }
 
-            return $discovery
+            $live += $discovery
         }
         catch {
             $stale += "$candidate : $($_.Exception.Message)"
         }
     }
 
+    $processes = @($live | Select-Object -ExpandProperty processId -Unique)
+    if ($processes.Count -gt 1) { throw "Multiple Revit processes found; specify -PipeName or -DiscoveryPath." }
+    if ($live.Count -gt 0) { return $live[0] }
     $detail = if ($stale.Count -gt 0) { " Stale or invalid files: $($stale -join '; ')" } else { "" }
     throw "No live Revit bridge discovery file was found. Checked RevitAi\bridge.json and ReVitAI\revitai-bridge.json.$detail"
 }
@@ -65,24 +73,27 @@ function Read-BridgeDiscovery {
 function Invoke-BridgeRequest {
     param(
         [Parameter(Mandatory = $true)]
-        [hashtable]$Request
+        [hashtable]$Request,
+        [string]$TargetPipeName
     )
 
-    $resolvedPipeName = $PipeName
+    $resolvedPipeName = if ($TargetPipeName) { $TargetPipeName } else { $PipeName }
     $discovery = $null
     if ([string]::IsNullOrWhiteSpace($resolvedPipeName)) {
         $discovery = Read-BridgeDiscovery
         $resolvedPipeName = [string]$discovery.pipeName
     }
 
-    if ($Request.type -eq "invoke" -and -not $Request.ContainsKey("expectedDocumentGuid")) {
-        if ($null -eq $discovery) {
-            $discovery = Read-BridgeDiscovery
-        }
-        if (-not [string]::IsNullOrWhiteSpace([string]$discovery.documentGuid)) {
-            $Request.expectedDocumentGuid = [string]$discovery.documentGuid
+    if ($Request.type -eq "invoke" -and $Request.tool -ne "get_document_snapshot" -and -not $Request.ContainsKey("expectedDocumentGuid")) {
+        if ($ExpectedDocumentGuid) { $Request.expectedDocumentGuid = $ExpectedDocumentGuid }
+        else {
+            $snapshot = Invoke-BridgeRequest -TargetPipeName $resolvedPipeName -Request @{ type = "invoke"; tool = "get_document_snapshot"; arguments = @{}; requestId = [Guid]::NewGuid().ToString("N") }
+            if ($snapshot.success -ne $true -or [string]::IsNullOrWhiteSpace([string]$snapshot.payload.documentGuid)) { throw "Cannot bind the current document. Read get_document_snapshot first." }
+            $Request.expectedDocumentGuid = [string]$snapshot.payload.documentGuid
         }
     }
+    $Request.protocolVersion = "3.0"
+    $Request.hostId = $resolvedPipeName
 
     $pipe = [System.IO.Pipes.NamedPipeClientStream]::new(
         ".",
@@ -105,7 +116,7 @@ function Invoke-BridgeRequest {
 
         $readTask = $reader.ReadLineAsync()
         if (-not $readTask.Wait($TimeoutSeconds * 1000)) {
-            throw "Timed out waiting for the Revit bridge response."
+            throw "Outcome unknown for request $($Request.requestId) on $resolvedPipeName. Query request-status before retrying a mutation."
         }
 
         $responseText = $readTask.Result
@@ -132,6 +143,8 @@ function Write-Json {
 }
 
 switch ($Action) {
+    "request-status" { Write-Json (Invoke-BridgeRequest -Request @{ type = "request.status"; requestId = $Tool }); break }
+    "cancel" { Write-Json (Invoke-BridgeRequest -Request @{ type = "request.cancel"; requestId = $Tool }); break }
     "agent-status" {
         Write-Json (Invoke-BridgeRequest -Request @{ type = "agent.status" })
         break

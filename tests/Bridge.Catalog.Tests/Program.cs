@@ -1,0 +1,22 @@
+using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using BimAi.Protocol;
+
+var assembly = typeof(ReVitAI.Bridge.BridgeRuntime).Assembly;
+var type = assembly.GetType("ReVitAI.Bridge.ToolDispatcher")!;
+var instance = Activator.CreateInstance(type)!;
+var catalog = JsonSerializer.SerializeToNode(type.GetMethod("Catalog")!.Invoke(instance, [true]), new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })!.AsObject();
+var tools = catalog["tools"]!.AsArray();
+if (tools.Count != 145) throw new Exception($"Unexpected catalog size: {tools.Count}");
+var names = tools.Select(t => t!["name"]!.GetValue<string>()).ToHashSet();
+foreach (var disabled in BridgeProtocol.DisabledTools) if (names.Contains(disabled)) throw new Exception("Disabled tool exposed");
+foreach (var name in new[] { "apply_drawing_plan", "create_detail_curves", "create_text_notes", "create_level", "create_stair" }) if (!names.Contains(name)) throw new Exception("Missing shared tool: " + name);
+JsonNode Schema(string name) => tools.Single(t => t!["name"]!.GetValue<string>() == name)!["inputSchema"]!;
+BridgeProtocol.Validate(JsonNode.Parse("""{"elevation":[3,6],"levelName":["L2","L3"]}"""), Schema("create_level"));
+BridgeProtocol.Validate(JsonNode.Parse("""{"elevation":3,"name":"L2"}"""), Schema("create_level"));
+BridgeProtocol.Validate(JsonNode.Parse("""{"text":"note","position":{"x":0,"y":0}}"""), Schema("create_text_notes"));
+BridgeProtocol.Validate(JsonNode.Parse("""{"lines":[{"start":{"x":0,"y":0},"end":{"x":1,"y":0}}]}"""), Schema("create_detail_curves"));
+BridgeProtocol.Validate(JsonNode.Parse("""{"ops":[{"type":"create_text_notes","text":"note","position":{"x":0,"y":0}}]}"""), Schema("apply_drawing_plan"));
+if (args.Length > 0) File.WriteAllText(args[0], catalog.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+Console.WriteLine($"Catalog: {tools.Count} unified tools; disabled tools, scalar/array aliases and drawing schemas passed.");

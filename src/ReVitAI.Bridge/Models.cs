@@ -30,6 +30,7 @@ internal sealed record InvocationContext
     public required UIApplication UiApplication { get; init; }
     public required JsonElement Arguments { get; init; }
     public bool DryRun { get; init; }
+    public Transaction? Transaction { get; init; }
 
     public Autodesk.Revit.DB.Document Document =>
         UiApplication.ActiveUIDocument?.Document
@@ -45,6 +46,8 @@ internal sealed class PendingCommand
     public required string Tool { get; init; }
     public required JsonElement Arguments { get; init; }
     public required TaskCompletionSource<object?> Completion { get; init; }
+    public CancellationToken CancellationToken { get; init; }
+    public string? ExpectedDocumentGuid { get; init; }
 }
 
 internal static class Json
