@@ -236,10 +236,13 @@ internal static class Program
         Check("get_all_grids 返回 2 个轴网", grids.Success && grids.Message.Contains("2 个轴网", StringComparison.Ordinal));
 
         var views = await ExecuteImplementationAsync("get_all_views", adapter, context, """{}""");
-        Check("get_all_views 返回 3 个视图", views.Success && views.Message.Contains("3 个视图", StringComparison.Ordinal));
+        Check("get_all_views 排除样板、浏览器及明细表", views.Success && views.Message.Contains("2 个视图", StringComparison.Ordinal));
 
         var filteredViews = await ExecuteImplementationAsync("get_all_views", adapter, context, """{"viewType":"ThreeD"}""");
         Check("get_all_views 支持 viewType 过滤", filteredViews.Success && filteredViews.Message.Contains("1 个视图", StringComparison.Ordinal));
+
+        var chineseViews = await ExecuteImplementationAsync("get_all_views", adapter, context, """{"viewType":"平面图"}""");
+        Check("get_all_views 中文契约类型可匹配原生类型", chineseViews.Success && chineseViews.Message.Contains("1 个视图", StringComparison.Ordinal));
 
         var active = await ExecuteImplementationAsync("get_active_view", adapter, context, """{}""");
         Check("get_active_view 返回活动视图", active.Success && active.Message.Contains("标高 1", StringComparison.Ordinal));

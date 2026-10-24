@@ -47,28 +47,40 @@ internal sealed class GetAllGridsImplementation : IToolImplementation
     }
 }
 
+internal static class UserViewTypes
+{
+    internal static readonly IReadOnlyDictionary<string, string> Names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["FloorPlan"] = "平面图", ["CeilingPlan"] = "天花板平面图", ["Elevation"] = "立面图",
+        ["Section"] = "剖面图", ["Detail"] = "详图视图", ["DraftingView"] = "绘图视图",
+        ["ThreeD"] = "三维视图", ["Legend"] = "图例", ["AreaPlan"] = "面积平面图", ["EngineeringPlan"] = "工程平面图"
+    };
+    internal static string Normalize(string name) => Names.FirstOrDefault(pair => pair.Value == name).Key ?? name;
+}
+
 internal sealed class GetAllViewsImplementation : IToolImplementation
 {
     public Task<AIToolResult> ExecuteAsync(IRevitAdapter adapter, AIToolContext context, CancellationToken cancellationToken = default)
     {
         var viewService = adapter.ViewService ?? throw new InvalidOperationException("无法获取 ViewService");
         var document = ReadOnlySupport.RequireDocument(adapter, context);
-        var views = viewService.GetAllViews(document);
+        var views = viewService.GetAllViews(document)
+            .Where(view => !view.IsTemplate && UserViewTypes.Names.ContainsKey(view.ViewType)).ToArray();
         var viewType = WriteArgs.Text(context, "viewType", "view_type");
         if (!string.IsNullOrWhiteSpace(viewType))
         {
             views = views
-                .Where(view => string.Equals(view.ViewType, viewType, StringComparison.OrdinalIgnoreCase))
+                .Where(view => string.Equals(view.ViewType, UserViewTypes.Normalize(viewType), StringComparison.OrdinalIgnoreCase))
                 .ToArray();
         }
 
         return Task.FromResult(AIToolResult.Ok(
-            $"✅ 成功获取 {views.Count} 个视图",
+            $"✅ 成功获取 {views.Length} 个视图",
             new
             {
                 viewType,
-                views = views.Select(view => new { id = view.Id, name = view.Name, viewType = view.ViewType, isTemplate = view.IsTemplate }).ToArray(),
-                count = views.Count,
+                views = views.Select(view => new { id = view.Id, name = view.Name, type = UserViewTypes.Names[view.ViewType], viewType = view.ViewType, isTemplate = view.IsTemplate }).ToArray(),
+                count = views.Length,
             }));
     }
 }
@@ -91,6 +103,9 @@ internal sealed class GetActiveViewImplementation : IToolImplementation
             new
             {
                 id = view.Id,
+                view_id = view.Id,
+                view_name = view.Name,
+                view_type = view.ViewType,
                 name = view.Name,
                 viewType = view.ViewType,
                 isTemplate = view.IsTemplate,

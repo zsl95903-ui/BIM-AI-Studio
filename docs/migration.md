@@ -48,3 +48,7 @@
 
 **工具数量对不上？**
 协议 3.0 中 App 与独立 Bridge 共用 145 项运行时目录。120 是主契约总数，48 是历史独立 Bridge 数量。升级后重新读取 Schema；写请求必须绑定 expectedDocumentGuid。
+
+### 视图查询实机兼容修复
+
+get_all_views 默认只返回契约覆盖的普通用户视图，排除模板、内部浏览器和明细表；中文 viewType 参数映射到 Revit 原生枚举名称。输出保留原生 viewType，并补充中文 type；get_active_view 补充旧版视图标识字段别名。无 Revit 回归增加中文参数与排除范围检查；Revit 2027 只读实测已确认视图集合与旧插件一致。

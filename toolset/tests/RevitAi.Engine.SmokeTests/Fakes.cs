@@ -136,6 +136,8 @@ internal sealed class FakeViewService : IViewService
         new ViewInfo(2001, "标高 1", "FloorPlan", false),
         new ViewInfo(2002, "三维视图", "ThreeD", false),
         new ViewInfo(2003, "视图样板", "FloorPlan", true),
+        new ViewInfo(2004, "项目浏览器", "ProjectBrowser", false),
+        new ViewInfo(2005, "门明细表", "Schedule", false),
     };
 
     public IReadOnlyList<ViewInfo> GetAllViews(object document) => _views;
